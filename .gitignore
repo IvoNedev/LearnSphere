@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/App_Data/
+*.db
+*.db-shm
+*.db-wal
+**/node_modules/
+**/dist/
+**/.angular/
+**/coverage/
+src/LearnSphere.Api/wwwroot/
+.env
+*.user
+.vs/
+.vscode/
+TestResults/
+playwright-report/
