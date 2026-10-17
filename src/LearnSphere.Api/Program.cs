@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LearnSphere.Api.Configuration;
+using LearnSphere.Api.Contracts;
 using LearnSphere.Api.Domain;
 using LearnSphere.Api.Generation;
 using LearnSphere.Api.Jobs;
@@ -56,6 +57,10 @@ app.UseStatusCodePages(async context => await Results.Problem(statusCode: contex
 app.Use(async (context, next) =>
 {
     if (context.Request.ContentLength > 1_048_576) { await Results.Problem(statusCode: 413, title: "Request body is too large.", extensions: new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier }).ExecuteAsync(context); return; }
+    // OpenAPI Accepts metadata also participates in endpoint selection. Normalize this error
+    // before a content-type mismatch can be handled by the generic /api fallback.
+    if (HttpMethods.IsPost(context.Request.Method) && string.Equals(context.Request.Path.Value?.TrimEnd('/'), "/api/v1/generations", StringComparison.OrdinalIgnoreCase) && !context.Request.HasJsonContentType())
+    { await Results.Problem(statusCode: 400, title: "Use application/json.").ExecuteAsync(context); return; }
     await next(context);
 });
 app.UseDefaultFiles(); app.UseStaticFiles();
@@ -80,36 +85,32 @@ api.MapPost("", async (HttpContext http, AppDbContext db, GenerationSignal signa
         var job = new Generation { Title = request?.Title?.Trim(), Transcript = transcript, TranscriptChars = transcript.Length,
             TranscriptSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(transcript))), GenerationMode = llm.Value.Provider == "Mock" ? "mock" : "live" };
         db.Generations.Add(job); await db.SaveChangesAsync(ct); signal.Pulse();
-        return Results.Accepted($"/api/v1/generations/{job.Id}", new { job.Id, Status = "Queued" });
+        return Results.Accepted($"/api/v1/generations/{job.Id}", new CreateGenerationResponse(job.Id, GenerationStatus.Queued));
     }
     finally { signal.Admission.Release(); }
-});
+}).Accepts<CreateGenerationRequest>("application/json").Produces<CreateGenerationResponse>(202).ProducesValidationProblem().ProducesProblem(413).ProducesProblem(503);
 api.MapGet("/{id:guid}", async (Guid id, AppDbContext db, CancellationToken ct) =>
 {
     var job = await db.Generations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
-    return job is null ? Results.Problem(statusCode: 404, title: "Generation not found.") : Results.Ok(new
-    {
+    return job is null ? Results.Problem(statusCode: 404, title: "Generation not found.") : Results.Ok(new GenerationResponse(
         job.Id, job.Title, job.Status, job.GenerationMode, job.CreatedAt, job.StartedAt, job.CompletedAt,
-        Summary = job.Content?.Summary, Questions = job.Content?.Questions, job.Metadata,
-        Error = job.ErrorCode is null ? null : JobErrors.Get(job.ErrorCode)
-    });
-});
+        job.Content?.Summary, job.Content?.Questions, job.Metadata, job.ErrorCode is null ? null : JobErrors.Get(job.ErrorCode)));
+}).Produces<GenerationResponse>().ProducesProblem(404);
 api.MapGet("", async (HttpRequest request, AppDbContext db, CancellationToken ct) =>
 {
     int limit = 20;
     if (request.Query.ContainsKey("limit") && (!int.TryParse(request.Query["limit"], out limit) || limit is < 1 or > 100)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["limit"] = ["Limit must be between 1 and 100."] });
-    return Results.Ok(await db.Generations.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(limit).Select(x => new { x.Id, x.Title, x.Status, x.GenerationMode, x.CreatedAt }).ToArrayAsync(ct));
-});
+    return Results.Ok(await db.Generations.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(limit).Select(x => new GenerationListItem(x.Id, x.Title, x.Status, x.GenerationMode, x.CreatedAt)).ToArrayAsync(ct));
+}).Produces<GenerationListItem[]>().ProducesValidationProblem();
 api.MapDelete("/{id:guid}", async (Guid id, AppDbContext db, CancellationToken ct) =>
 {
     var deleted = await db.Generations.Where(x => x.Id == id && x.Status != GenerationStatus.Processing).ExecuteDeleteAsync(ct);
     if (deleted == 1) return Results.NoContent();
     return await db.Generations.AnyAsync(x => x.Id == id, ct) ? Results.Problem(statusCode: 409, title: "Wait for processing to finish before deleting.") : Results.Problem(statusCode: 404, title: "Generation not found.");
-});
+}).Produces(204).ProducesProblem(404).ProducesProblem(409);
 app.Map("/api/{**rest}", () => Results.Problem(statusCode: 404, title: "API route not found."));
 app.MapFallbackToFile("index.html");
 await app.RunAsync();
 return 0;
 
-public sealed record CreateGenerationRequest(string? Title, string? Transcript);
 public partial class Program;

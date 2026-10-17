@@ -25,10 +25,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public ILlmClient? Llm { get; init; }
     public bool InvalidLive { get; init; }
     public int MaxPending { get; init; } = 20;
+    private readonly string webRoot = Path.Combine(Path.GetTempPath(), "learnsphere-test-web-" + Guid.NewGuid().ToString("N"));
     public ApiFactory() { keeper = new(database); keeper.Open(); }
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        Directory.CreateDirectory(webRoot);
+        File.WriteAllText(Path.Combine(webRoot, "index.html"), "<html><body>LearnSphere test SPA</body></html>");
+        builder.UseWebRoot(webRoot);
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?> {
             ["ConnectionStrings:Default"] = database, ["Llm:Provider"] = InvalidLive ? "Gemini" : "Mock", ["Llm:Model"] = "", ["Llm:ApiKey"] = "", ["Generation:MaxPendingJobs"] = MaxPending.ToString()
         }));
@@ -96,6 +100,8 @@ public class ApiTests
         foreach (var path in new[] { "/api/v1/nope", Base + "/" + Guid.NewGuid() }) { var response = await client.GetAsync(path); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType); }
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/openapi/v1.json")).StatusCode);
+        Assert.Contains("LearnSphere test SPA", await client.GetStringAsync("/generations/example-deep-link"));
+        Assert.Contains("CreateGenerationRequest", await client.GetStringAsync("/openapi/v1.json"));
     }
     [Fact] public void LiveWithoutCredentialsFailsAtStartup()
     {
