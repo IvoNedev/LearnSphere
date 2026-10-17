@@ -47,7 +47,7 @@ public sealed class TrainingContentService(ILlmClient client, IOptions<LlmOption
                 }
                 if (attempt == 1) return Result("provider_invalid_output");
                 repaired = true;
-                request = request with { Messages = [..request.Messages, new("model", response.Text), new("user", "Your previous output was invalid: " + string.Join("; ", errors) + ". Return corrected JSON only, grounded in the original transcript.")] };
+                request = request with { Messages = [.. request.Messages, new("model", response.Text), new("user", "Your previous output was invalid: " + string.Join("; ", errors) + ". Return corrected JSON only, grounded in the original transcript.")] };
                 // Repair input includes previous output; enforce the budget again.
                 var repairCount = await client.CountTokensAsync(request, deadline.Token);
                 if ((repairCount ?? request.Messages.Sum(m => m.Text.Length) * 4 + request.SystemPrompt.Length * 4 + 4000) > limits.MaxInputTokens) return Result("input_too_large");

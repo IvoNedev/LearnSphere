@@ -33,8 +33,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Directory.CreateDirectory(webRoot);
         File.WriteAllText(Path.Combine(webRoot, "index.html"), "<html><body>LearnSphere test SPA</body></html>");
         builder.UseWebRoot(webRoot);
-        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?> {
-            ["ConnectionStrings:Default"] = database, ["Llm:Provider"] = InvalidLive ? "Gemini" : "Mock", ["Llm:Model"] = "", ["Llm:ApiKey"] = "", ["Generation:MaxPendingJobs"] = MaxPending.ToString()
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Default"] = database,
+            ["Llm:Provider"] = InvalidLive ? "Gemini" : "Mock",
+            ["Llm:Model"] = "",
+            ["Llm:ApiKey"] = "",
+            ["Generation:MaxPendingJobs"] = MaxPending.ToString()
         }));
         builder.ConfigureServices(services => { if (Llm is not null) { services.RemoveAll<ILlmClient>(); services.AddSingleton(Llm); } });
     }
@@ -53,7 +58,8 @@ public class ApiTests
             await Task.Delay(30, deadline.Token);
         }
     }
-    [Fact] public async Task EndToEndListAndDeleteWithoutTranscriptDisclosure()
+    [Fact]
+    public async Task EndToEndListAndDeleteWithoutTranscriptDisclosure()
     {
         using var factory = new ApiFactory(); using var client = factory.CreateClient();
         var response = await client.PostAsJsonAsync(Base, new { title = "Course", transcript = GenerationTests.Transcript });
@@ -79,13 +85,16 @@ public class ApiTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         Assert.Contains("traceId", await response.Content.ReadAsStringAsync());
     }
-    [Theory] [InlineData(499)] [InlineData(200001)]
+    [Theory]
+    [InlineData(499)]
+    [InlineData(200001)]
     public async Task LengthLimits(int length)
     {
         using var factory = new ApiFactory(); using var client = factory.CreateClient();
         var result = await client.PostAsJsonAsync(Base, new { transcript = new string('x', length) }); Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode); Assert.Contains("errors", await result.Content.ReadAsStringAsync());
     }
-    [Fact] public async Task TitleContentTypeBodyLimitAndInvalidListLimit()
+    [Fact]
+    public async Task TitleContentTypeBodyLimitAndInvalidListLimit()
     {
         using var factory = new ApiFactory(); using var client = factory.CreateClient();
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync(Base, new { title = new string('x', 201), transcript = GenerationTests.Transcript })).StatusCode);
@@ -94,7 +103,8 @@ public class ApiTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(Base + "?limit=0")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(Base + "?limit=nope")).StatusCode);
     }
-    [Fact] public async Task HostingAndUnknownRoutes()
+    [Fact]
+    public async Task HostingAndUnknownRoutes()
     {
         using var factory = new ApiFactory(); using var client = factory.CreateClient();
         foreach (var path in new[] { "/api/v1/nope", Base + "/" + Guid.NewGuid() }) { var response = await client.GetAsync(path); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType); }
@@ -103,11 +113,13 @@ public class ApiTests
         Assert.Contains("LearnSphere test SPA", await client.GetStringAsync("/generations/example-deep-link"));
         Assert.Contains("CreateGenerationRequest", await client.GetStringAsync("/openapi/v1.json"));
     }
-    [Fact] public void LiveWithoutCredentialsFailsAtStartup()
+    [Fact]
+    public void LiveWithoutCredentialsFailsAtStartup()
     {
         using var factory = new ApiFactory { InvalidLive = true }; Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
     }
-    [Fact] public async Task AdmissionIsBoundedAndProcessingCannotBeDeleted()
+    [Fact]
+    public async Task AdmissionIsBoundedAndProcessingCannotBeDeleted()
     {
         var blocking = new BlockingLlmClient(); using var factory = new ApiFactory { Llm = blocking, MaxPending = 1 }; using var client = factory.CreateClient();
         var created = await client.PostAsJsonAsync(Base, new { transcript = GenerationTests.Transcript });
@@ -116,7 +128,8 @@ public class ApiTests
         Assert.Equal(HttpStatusCode.Conflict, (await client.DeleteAsync(created.Headers.Location)).StatusCode);
         blocking.Release.TrySetResult(); await Terminal(client, created.Headers.Location!.ToString());
     }
-    [Fact] public async Task StartupSweepFailsInterruptedAndProcessesQueued()
+    [Fact]
+    public async Task StartupSweepFailsInterruptedAndProcessesQueued()
     {
         // Exercise real worker startup on a seeded SQLite database without racing host startup.
         var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -136,7 +149,9 @@ public class ApiTests
         var done = await db.Generations.AsNoTracking().SingleAsync(x => x.Id == queued.Id); Assert.Equal(GenerationStatus.Succeeded, done.Status); Assert.Null(done.Transcript);
         await connection.DisposeAsync();
     }
-    [Theory] [InlineData(false)] [InlineData(true)]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task ProcessorClearsTranscriptOnFailures(bool unexpected)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();

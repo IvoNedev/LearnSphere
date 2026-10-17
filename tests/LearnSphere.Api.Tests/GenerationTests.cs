@@ -34,30 +34,54 @@ public class GenerationTests
     [InlineData("ＡＢＣ", "abc")]
     public void NormalizationIsSymmetric(string a, string b) => Assert.Equal(ExcerptVerifier.Normalize(a), ExcerptVerifier.Normalize(b));
     [Theory]
-    [InlineData("", false)] [InlineData("unrelated", false)] [InlineData("must FOLLOW", true)]
+    [InlineData("", false)]
+    [InlineData("unrelated", false)]
+    [InlineData("must FOLLOW", true)]
     public void ExcerptsMatchOnlySource(string excerpt, bool expected) => Assert.Equal(expected, ExcerptVerifier.IsVerified(excerpt, ExcerptVerifier.Normalize(Transcript)));
     [Fact] public void ValidOutputPasses() => Assert.Empty(TrainingContentValidator.Validate(Valid(), new()));
     [Theory]
-    [InlineData("count")] [InlineData("options")] [InlineData("duplicate")] [InlineData("index")] [InlineData("negative")]
-    [InlineData("prompt")] [InlineData("explanation")] [InlineData("excerpt")] [InlineData("longExcerpt")] [InlineData("points")] [InlineData("outcome")] [InlineData("duplicatePrompt")] [InlineData("nullQuestion")]
+    [InlineData("count")]
+    [InlineData("options")]
+    [InlineData("duplicate")]
+    [InlineData("index")]
+    [InlineData("negative")]
+    [InlineData("prompt")]
+    [InlineData("explanation")]
+    [InlineData("excerpt")]
+    [InlineData("longExcerpt")]
+    [InlineData("points")]
+    [InlineData("outcome")]
+    [InlineData("duplicatePrompt")]
+    [InlineData("nullQuestion")]
     public void InvalidOutputRejected(string kind)
     {
         var m = Valid(); var q = m.Questions![0];
         m = kind switch { "count" => m with { Questions = [] }, "points" => m with { Summary = new("Overview", ["One", "Two"]) }, "outcome" => m with { Outcome = "insufficient_content" }, _ => m };
-        if (m.Questions!.Length > 0) m.Questions[0] = kind switch {
-            "options" => q with { Options = ["a", "b", "c"] }, "duplicate" => q with { Options = [" a ", "A", "c", "d"] },
-            "index" => q with { CorrectAnswerIndex = 4 }, "negative" => q with { CorrectAnswerIndex = -1 }, "prompt" => q with { Prompt = "" },
-            "explanation" => q with { Explanation = "" }, "excerpt" => q with { SourceExcerpt = "" }, "longExcerpt" => q with { SourceExcerpt = string.Join(" ", Enumerable.Repeat("word", 41)) },
-            "duplicatePrompt" => q with { Prompt = m.Questions[1].Prompt }, "nullQuestion" => null!, _ => q };
+        if (m.Questions!.Length > 0) m.Questions[0] = kind switch
+        {
+            "options" => q with { Options = ["a", "b", "c"] },
+            "duplicate" => q with { Options = [" a ", "A", "c", "d"] },
+            "index" => q with { CorrectAnswerIndex = 4 },
+            "negative" => q with { CorrectAnswerIndex = -1 },
+            "prompt" => q with { Prompt = "" },
+            "explanation" => q with { Explanation = "" },
+            "excerpt" => q with { SourceExcerpt = "" },
+            "longExcerpt" => q with { SourceExcerpt = string.Join(" ", Enumerable.Repeat("word", 41)) },
+            "duplicatePrompt" => q with { Prompt = m.Questions[1].Prompt },
+            "nullQuestion" => null!,
+            _ => q
+        };
         Assert.NotEmpty(TrainingContentValidator.Validate(m, new()));
     }
-    [Fact] public async Task SuccessAndMissingUsage()
+    [Fact]
+    public async Task SuccessAndMissingUsage()
     {
         var fake = new ScriptedLlmClient(Response()); var result = await Service(fake).GenerateAsync(Transcript, default);
         Assert.Null(result.ErrorCode); Assert.Null(result.Metadata.InputTokens); Assert.Equal(1, fake.Calls);
         Assert.All(result.Content!.Questions, q => Assert.True(q.ExcerptVerified));
     }
-    [Fact] public async Task OneRepairAggregatesUsage()
+    [Fact]
+    public async Task OneRepairAggregatesUsage()
     {
         var fake = new ScriptedLlmClient(new LlmResponse("{", InputTokens: 2, OutputTokens: 3), Response(tokens: 5));
         var result = await Service(fake).GenerateAsync(Transcript, default);
@@ -65,12 +89,14 @@ public class GenerationTests
         Assert.Equal(7, result.Metadata.InputTokens); Assert.Equal(8, result.Metadata.OutputTokens);
         Assert.Contains(fake.Requests[1].Messages, m => m.Role == "model");
     }
-    [Fact] public async Task TwoInvalidResponsesFail()
+    [Fact]
+    public async Task TwoInvalidResponsesFail()
     {
         var fake = new ScriptedLlmClient(new LlmResponse("{}"), new LlmResponse("not json"));
         Assert.Equal("provider_invalid_output", (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(2, fake.Calls);
     }
-    [Fact] public async Task MissingAnswerIndexDoesNotBecomeZero()
+    [Fact]
+    public async Task MissingAnswerIndexDoesNotBecomeZero()
     {
         var text = Response().Text!.Replace("\"correctAnswerIndex\":0,", "");
         var fake = new ScriptedLlmClient(new LlmResponse(text), new LlmResponse(text));
@@ -84,36 +110,45 @@ public class GenerationTests
     {
         var fake = new ScriptedLlmClient(new LlmResponse("{}", finish)); Assert.Equal(code, (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(1, fake.Calls);
     }
-    [Fact] public async Task SafetyBlockAndEmptyTextDoNotRepair()
+    [Fact]
+    public async Task SafetyBlockAndEmptyTextDoNotRepair()
     {
         foreach (var response in new[] { new LlmResponse("{}", BlockReason: "SAFETY"), new LlmResponse(null) })
         { var fake = new ScriptedLlmClient(response); Assert.NotNull((await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(1, fake.Calls); }
     }
-    [Fact] public async Task InsufficientDoesNotRepair()
+    [Fact]
+    public async Task InsufficientDoesNotRepair()
     {
         var fake = new ScriptedLlmClient(Response(new("insufficient_content", "few facts", null, [])));
         Assert.Equal("insufficient_content", (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(1, fake.Calls);
     }
-    [Fact] public async Task OversizedTokenCountPreventsGeneration()
+    [Fact]
+    public async Task OversizedTokenCountPreventsGeneration()
     {
         var fake = new ScriptedLlmClient { Tokens = 100001 }; Assert.Equal("input_too_large", (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(0, fake.Calls);
     }
-    [Fact] public async Task UnknownCountUsesConservativeFallback()
+    [Fact]
+    public async Task UnknownCountUsesConservativeFallback()
     {
         var fake = new ScriptedLlmClient(Response()) { Tokens = null }; Assert.Null((await Service(fake).GenerateAsync(Transcript, default)).ErrorCode);
         Assert.Equal("input_too_large", (await Service(new ScriptedLlmClient { Tokens = null }, new() { MaxInputTokens = 100 }).GenerateAsync(Transcript, default)).ErrorCode);
     }
-    [Fact] public async Task UnverifiedExcerptIsFlaggedNotFailed()
+    [Fact]
+    public async Task UnverifiedExcerptIsFlaggedNotFailed()
     {
         var m = Valid(); m.Questions![0] = m.Questions[0] with { SourceExcerpt = "not in the source" };
         var result = await Service(new ScriptedLlmClient(Response(m))).GenerateAsync(Transcript, default);
         Assert.Null(result.ErrorCode); Assert.False(result.Content!.Questions[0].ExcerptVerified);
     }
     [Theory]
-    [InlineData(LlmErrorKind.RateLimited, "provider_rate_limited")] [InlineData(LlmErrorKind.AuthFailed, "provider_auth_failed")]
-    [InlineData(LlmErrorKind.Unavailable, "provider_unavailable")] [InlineData(LlmErrorKind.Timeout, "provider_timeout")] [InlineData(LlmErrorKind.BadRequest, "internal_error")]
+    [InlineData(LlmErrorKind.RateLimited, "provider_rate_limited")]
+    [InlineData(LlmErrorKind.AuthFailed, "provider_auth_failed")]
+    [InlineData(LlmErrorKind.Unavailable, "provider_unavailable")]
+    [InlineData(LlmErrorKind.Timeout, "provider_timeout")]
+    [InlineData(LlmErrorKind.BadRequest, "internal_error")]
     public async Task MapsProviderErrors(LlmErrorKind kind, string code) => Assert.Equal(code, (await Service(new ScriptedLlmClient(new LlmException(kind))).GenerateAsync(Transcript, default)).ErrorCode);
-    [Fact] public async Task MockUsesVerbatimExcerpts()
+    [Fact]
+    public async Task MockUsesVerbatimExcerpts()
     {
         var result = await Service(new MockLlmClient()).GenerateAsync(Transcript, default);
         Assert.Null(result.ErrorCode); Assert.All(result.Content!.Questions, q => Assert.True(q.ExcerptVerified));

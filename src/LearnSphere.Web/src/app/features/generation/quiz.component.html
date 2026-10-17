@@ -1,9 +1,55 @@
-<div class="section-heading"><div><span class="step">03</span><h2>Test your understanding</h2></div><button type="button" class="text-button" (click)="showKey.set(!showKey())" [attr.aria-pressed]="showKey()">{{ showKey() ? 'Hide answer key' : 'Show answer key' }}</button></div>
+<div class="section-heading">
+  <div>
+    <span class="step">03</span>
+    <h2>Test your understanding</h2>
+  </div>
+  <button
+    type="button"
+    class="text-button"
+    (click)="showKey.set(!showKey())"
+    [attr.aria-pressed]="showKey()"
+  >
+    {{ showKey() ? 'Hide answer key' : 'Show answer key' }}
+  </button>
+</div>
 @for (q of questions(); track $index; let i = $index) {
-<fieldset class="question"><legend><span class="question-number">{{ i + 1 }}.</span> {{ q.prompt }}</legend>
-@for (option of q.options; track $index; let j = $index) {
-<label class="option" [class.correct]="(checked() || showKey()) && j === q.correctAnswerIndex" [class.incorrect]="checked() && answers()[i] === j && j !== q.correctAnswerIndex"><input type="radio" [name]="'question-' + i" [value]="j" [checked]="answers()[i] === j" (change)="choose(i, j)"><span>{{ option }}</span></label>
+  <fieldset class="question">
+    <legend>
+      <span class="question-number">{{ i + 1 }}.</span> {{ q.prompt }}
+    </legend>
+    @for (option of q.options; track $index; let j = $index) {
+      <label
+        class="option"
+        [class.correct]="(checked() || showKey()) && j === q.correctAnswerIndex"
+        [class.incorrect]="checked() && answers()[i] === j && j !== q.correctAnswerIndex"
+        ><input
+          type="radio"
+          [name]="'question-' + i"
+          [value]="j"
+          [checked]="answers()[i] === j"
+          (change)="choose(i, j)"
+        /><span>{{ option }}</span></label
+      >
+    }
+    @if (checked() || showKey()) {
+      <div class="explanation">
+        <p>
+          <strong>Answer {{ q.correctAnswerIndex + 1 }}.</strong> {{ q.explanation }}
+        </p>
+        <blockquote>{{ q.sourceExcerpt }}</blockquote>
+        <span class="badge" [class.warning]="!q.excerptVerified">{{
+          q.excerptVerified ? '✓ Excerpt found in source' : '⚠ Excerpt needs review'
+        }}</span>
+        <p class="hint">
+          A matching excerpt is evidence of provenance, not proof that the answer is correct.
+        </p>
+      </div>
+    }
+  </fieldset>
 }
-@if (checked() || showKey()) { <div class="explanation"><p><strong>Answer {{ q.correctAnswerIndex + 1 }}.</strong> {{ q.explanation }}</p><blockquote>{{ q.sourceExcerpt }}</blockquote><span class="badge" [class.warning]="!q.excerptVerified">{{ q.excerptVerified ? '✓ Excerpt found in source' : '⚠ Excerpt needs review' }}</span><p class="hint">A matching excerpt is evidence of provenance, not proof that the answer is correct.</p></div> }
-</fieldset> }
-<div class="quiz-footer"><button class="primary" (click)="checked.set(true)">Check answers →</button>@if (checked()) { <p role="status">{{ score() }} / {{ questions().length }} correct</p> }</div>
+<div class="quiz-footer">
+  <button class="primary" (click)="checked.set(true)">Check answers →</button>
+  @if (checked()) {
+    <p role="status">{{ score() }} / {{ questions().length }} correct</p>
+  }
+</div>

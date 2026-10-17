@@ -15,7 +15,8 @@ public sealed class FakeHandler(Func<HttpRequestMessage, CancellationToken, Task
 public class GeminiTests
 {
     private static GeminiLlmClient Client(HttpMessageHandler handler, double timeout = 2) => new(new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(timeout) }, Options.Create(new LlmOptions { Provider = "Gemini", Model = "test-model", ApiKey = "fake-test-credential" }));
-    [Fact] public async Task WireContractAndThoughtFiltering()
+    [Fact]
+    public async Task WireContractAndThoughtFiltering()
     {
         var client = Client(new FakeHandler(async (request, ct) =>
         {
@@ -28,13 +29,21 @@ public class GeminiTests
         }));
         var response = await client.GenerateAsync(Prompts.Create("source"), default); Assert.Equal("visible", response.Text); Assert.Equal(10, response.InputTokens); Assert.Equal(20, response.OutputTokens); Assert.Equal(3, response.ThoughtTokens);
     }
-    [Theory] [InlineData("MAX_TOKENS", FinishReason.MaxTokens)] [InlineData("SAFETY", FinishReason.Safety)] [InlineData("STOP", FinishReason.Stop)]
+    [Theory]
+    [InlineData("MAX_TOKENS", FinishReason.MaxTokens)]
+    [InlineData("SAFETY", FinishReason.Safety)]
+    [InlineData("STOP", FinishReason.Stop)]
     public async Task FinishReasons(string finish, FinishReason expected)
     {
         var client = Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($"{{\"candidates\":[{{\"finishReason\":\"{finish}\",\"content\":{{\"parts\":[]}}}}]}}") })));
         var response = await client.GenerateAsync(Prompts.Create("source"), default); Assert.Equal(expected, response.FinishReason); Assert.Null(response.InputTokens);
     }
-    [Theory] [InlineData(429, LlmErrorKind.RateLimited)] [InlineData(401, LlmErrorKind.AuthFailed)] [InlineData(403, LlmErrorKind.AuthFailed)] [InlineData(503, LlmErrorKind.Unavailable)] [InlineData(400, LlmErrorKind.BadRequest)]
+    [Theory]
+    [InlineData(429, LlmErrorKind.RateLimited)]
+    [InlineData(401, LlmErrorKind.AuthFailed)]
+    [InlineData(403, LlmErrorKind.AuthFailed)]
+    [InlineData(503, LlmErrorKind.Unavailable)]
+    [InlineData(400, LlmErrorKind.BadRequest)]
     public async Task ErrorsDoNotLeakBodiesOrRetry(int status, LlmErrorKind expected)
     {
         int calls = 0;
@@ -42,9 +51,11 @@ public class GeminiTests
         var exception = await Assert.ThrowsAsync<LlmException>(() => client.GenerateAsync(Prompts.Create("source"), default));
         Assert.Equal(expected, exception.Kind); Assert.DoesNotContain("PRIVATE", exception.ToString()); Assert.Equal(1, calls); Assert.Equal(TimeSpan.FromSeconds(10), exception.RetryAfter);
     }
-    [Fact] public async Task CountTokensUsesFullRequestAndFailureIsUnknown()
+    [Fact]
+    public async Task CountTokensUsesFullRequestAndFailureIsUnknown()
     {
-        var client = Client(new FakeHandler(async (request, ct) => {
+        var client = Client(new FakeHandler(async (request, ct) =>
+        {
             using var doc = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             Assert.True(doc.RootElement.GetProperty("generateContentRequest").TryGetProperty("systemInstruction", out _));
             return new(HttpStatusCode.OK) { Content = new StringContent("{\"totalTokens\":123}") };
@@ -52,12 +63,17 @@ public class GeminiTests
         Assert.Equal(123, await client.CountTokensAsync(Prompts.Create("source"), default));
         Assert.Null(await Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)))).CountTokensAsync(Prompts.Create("source"), default));
     }
-    [Fact] public async Task HttpTimeoutIsMapped()
+    [Fact]
+    public async Task HttpTimeoutIsMapped()
     {
         var client = Client(new FakeHandler(async (_, ct) => { await Task.Delay(1000, ct); return new(HttpStatusCode.OK); }), .02);
         var exception = await Assert.ThrowsAsync<LlmException>(() => client.GenerateAsync(Prompts.Create("source"), default)); Assert.Equal(LlmErrorKind.Timeout, exception.Kind);
     }
-    [Theory] [InlineData("[]")] [InlineData("{\"candidates\":null}")] [InlineData("{\"candidates\":[null]}")] [InlineData("not JSON")]
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{\"candidates\":null}")]
+    [InlineData("{\"candidates\":[null]}")]
+    [InlineData("not JSON")]
     public async Task MalformedProviderEnvelopeIsInvalidOutput(string body)
     {
         var client = Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) })));

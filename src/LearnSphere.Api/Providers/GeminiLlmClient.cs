@@ -32,8 +32,13 @@ public sealed class GeminiLlmClient(HttpClient http, IOptions<LlmOptions> option
     public async Task<LlmResponse> GenerateAsync(LlmRequest request, CancellationToken ct)
     {
         var body = Body(request);
-        var generation = new JsonObject { ["temperature"] = config.Temperature, ["maxOutputTokens"] = config.MaxOutputTokens,
-            ["responseMimeType"] = "application/json", ["responseJsonSchema"] = JsonNode.Parse(request.JsonSchema.GetRawText()) };
+        var generation = new JsonObject
+        {
+            ["temperature"] = config.Temperature,
+            ["maxOutputTokens"] = config.MaxOutputTokens,
+            ["responseMimeType"] = "application/json",
+            ["responseJsonSchema"] = JsonNode.Parse(request.JsonSchema.GetRawText())
+        };
         if (config.ThinkingBudget.HasValue) generation["thinkingConfig"] = new JsonObject { ["thinkingBudget"] = config.ThinkingBudget.Value };
         body["generationConfig"] = generation;
         try

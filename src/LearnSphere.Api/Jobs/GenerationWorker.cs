@@ -25,7 +25,7 @@ public sealed class GenerationProcessor(AppDbContext db, TrainingContentService 
         try
         {
             var result = await service.GenerateAsync(job.Transcript ?? "", ct);
-            if (result.ErrorCode is {} error) job.Fail(error, result.Metadata);
+            if (result.ErrorCode is { } error) job.Fail(error, result.Metadata);
             else job.Succeed(result.Content!, result.Metadata);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }

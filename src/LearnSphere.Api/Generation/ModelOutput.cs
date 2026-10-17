@@ -24,7 +24,7 @@ public static class TrainingContentValidator
         if (output?.Outcome != "ok") errors.Add("outcome must be ok");
         if (string.IsNullOrWhiteSpace(output?.Summary?.Overview)) errors.Add("summary.overview is required");
         if (output?.Summary?.KeyPoints is not { Length: >= 3 and <= 8 } points || points.Any(string.IsNullOrWhiteSpace)) errors.Add("summary.keyPoints must contain 3–8 nonempty items");
-        if (output?.Questions is not {} questions) { errors.Add("questions are required"); return errors; }
+        if (output?.Questions is not { } questions) { errors.Add("questions are required"); return errors; }
         if (questions.Length != options.QuestionCount) errors.Add($"questions must contain {options.QuestionCount} items");
         HashSet<string> prompts = new(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < questions.Length; i++)

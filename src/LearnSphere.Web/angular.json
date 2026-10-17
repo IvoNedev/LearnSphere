@@ -29,9 +29,7 @@
                 "input": "public"
               }
             ],
-            "styles": [
-              "src/styles.scss"
-            ],
+            "styles": ["src/styles.scss"],
             "outputPath": {
               "base": "../LearnSphere.Api/wwwroot",
               "browser": ""

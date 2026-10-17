@@ -82,8 +82,14 @@ api.MapPost("", async (HttpContext http, AppDbContext db, GenerationSignal signa
     {
         if (await db.Generations.CountAsync(x => x.Status == GenerationStatus.Queued || x.Status == GenerationStatus.Processing, ct) >= limits.Value.MaxPendingJobs)
         { http.Response.Headers.RetryAfter = "5"; return Results.Problem(statusCode: 503, title: "The generation queue is full. Try again shortly."); }
-        var job = new Generation { Title = request?.Title?.Trim(), Transcript = transcript, TranscriptChars = transcript.Length,
-            TranscriptSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(transcript))), GenerationMode = llm.Value.Provider == "Mock" ? "mock" : "live" };
+        var job = new Generation
+        {
+            Title = request?.Title?.Trim(),
+            Transcript = transcript,
+            TranscriptChars = transcript.Length,
+            TranscriptSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(transcript))),
+            GenerationMode = llm.Value.Provider == "Mock" ? "mock" : "live"
+        };
         db.Generations.Add(job); await db.SaveChangesAsync(ct); signal.Pulse();
         return Results.Accepted($"/api/v1/generations/{job.Id}", new CreateGenerationResponse(job.Id, GenerationStatus.Queued));
     }
