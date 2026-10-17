@@ -9,6 +9,20 @@ const question = {
   excerptVerified: true,
 };
 describe('QuizComponent', () => {
+  it('resets answers and revealed keys when the source questions change', () => {
+    const f = TestBed.createComponent(QuizComponent);
+    f.componentRef.setInput('questions', [question]);
+    f.detectChanges();
+    f.componentInstance.choose(0, 1);
+    f.componentInstance.checked.set(true);
+    f.componentInstance.showKey.set(true);
+    f.detectChanges();
+    f.componentRef.setInput('questions', [{ ...question, prompt: 'Another course' }]);
+    f.detectChanges();
+    expect(f.componentInstance.answers()).toEqual({});
+    expect(f.componentInstance.checked()).toBe(false);
+    expect(f.componentInstance.showKey()).toBe(false);
+  });
   it('checks correct and incorrect choices and toggles evidence', () => {
     const fixture = TestBed.createComponent(QuizComponent);
     fixture.componentRef.setInput('questions', [question]);

@@ -2,7 +2,17 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { timer } from 'rxjs';
+import {
+  catchError,
+  combineLatest,
+  EMPTY,
+  map,
+  startWith,
+  Subject,
+  switchMap,
+  tap,
+  timer,
+} from 'rxjs';
 import { GenerationsApi, pollGeneration } from '../../core/generations-api.service';
 import { Generation } from '../../core/models';
 import { problemDetails } from '../../core/problem-details';
@@ -17,17 +27,64 @@ export class GenerationPage {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private destroy = inject(DestroyRef);
+  private refresh = new Subject<void>();
   readonly job = signal<Generation | null>(null);
   readonly error = signal('');
   readonly busy = signal(false);
   readonly elapsed = signal(0);
-  readonly id = this.route.snapshot.paramMap.get('id')!;
+  readonly id = signal('');
+  readonly attempts = signal(0);
+  readonly maxAttempts = signal(0);
+  readonly pollingStopped = signal(false);
   constructor() {
-    pollGeneration(() => this.api.get(this.id))
-      .pipe(takeUntilDestroyed())
+    combineLatest([
+      this.route.paramMap.pipe(map((params) => params.get('id')!)),
+      this.refresh.pipe(startWith(undefined)),
+      this.api.capabilities(),
+    ])
+      .pipe(
+        switchMap(([id, , caps]) => {
+          this.id.set(id);
+          this.job.set(null);
+          this.error.set('');
+          this.busy.set(false);
+          this.elapsed.set(0);
+          this.attempts.set(0);
+          this.maxAttempts.set(caps.maxPollAttempts);
+          this.pollingStopped.set(false);
+          return pollGeneration(
+            () => this.api.get(id),
+            caps.pollIntervalMs,
+            caps.maxPollAttempts,
+            caps.pollRequestTimeoutMs,
+            (attempt) => this.attempts.set(attempt),
+          ).pipe(
+            tap({
+              next: (job) => this.job.set(job),
+              complete: () => {
+                if (this.active()) {
+                  this.pollingStopped.set(true);
+                  this.error.set(
+                    'Status checking reached its limit. Your job was not restarted. Check status again when ready.',
+                  );
+                }
+              },
+            }),
+            catchError((error) => {
+              this.pollingStopped.set(true);
+              this.error.set(
+                error?.name === 'TimeoutError'
+                  ? 'The status request timed out. The job continues on the server.'
+                  : problemDetails(error).message,
+              );
+              return EMPTY;
+            }),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
       .subscribe({
-        next: (j) => this.job.set(j),
-        error: (e) => this.error.set(problemDetails(e).message),
+        error: () => this.error.set('Could not load server settings. Reload the page to retry.'),
       });
     timer(0, 1000)
       .pipe(takeUntilDestroyed())
@@ -45,9 +102,31 @@ export class GenerationPage {
   active() {
     return this.job()?.status === 'Queued' || this.job()?.status === 'Processing';
   }
+  checkStatus() {
+    this.refresh.next();
+  }
   retry() {
     if (this.busy()) return;
-    const draft = this.api.drafts.get(this.id);
+    const id = this.id();
+    if (this.job()?.error?.resumeStage === 'PersistResult') {
+      this.busy.set(true);
+      this.api
+        .resumePersistence(id)
+        .pipe(takeUntilDestroyed(this.destroy))
+        .subscribe({
+          next: () => {
+            if (this.id() === id) this.refresh.next();
+          },
+          error: (e) => {
+            if (this.id() === id) {
+              this.busy.set(false);
+              this.error.set(problemDetails(e).message);
+            }
+          },
+        });
+      return;
+    }
+    const draft = this.api.drafts.get(id);
     if (!draft) {
       void this.router.navigate(['/']);
       return;
@@ -59,30 +138,33 @@ export class GenerationPage {
       .subscribe({
         next: (result) => {
           this.api.drafts.set(result.id, draft);
-          void this.router
-            .navigateByUrl('/', { skipLocationChange: true })
-            .then(() => this.router.navigate(['/generations', result.id]));
+          if (this.id() === id) void this.router.navigate(['/generations', result.id]);
         },
         error: (e) => {
-          this.busy.set(false);
-          this.error.set(problemDetails(e).message);
+          if (this.id() === id) {
+            this.busy.set(false);
+            this.error.set(problemDetails(e).message);
+          }
         },
       });
   }
   delete() {
     if (this.busy()) return;
+    const id = this.id();
     this.busy.set(true);
     this.api
-      .delete(this.id)
+      .delete(id)
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: () => {
-          this.api.drafts.delete(this.id);
-          void this.router.navigate(['/']);
+          this.api.drafts.delete(id);
+          if (this.id() === id) void this.router.navigate(['/']);
         },
         error: (e) => {
-          this.busy.set(false);
-          this.error.set(problemDetails(e).message);
+          if (this.id() === id) {
+            this.busy.set(false);
+            this.error.set(problemDetails(e).message);
+          }
         },
       });
   }

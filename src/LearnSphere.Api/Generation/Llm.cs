@@ -11,7 +11,7 @@ public interface ILlmClient
     Task<int?> CountTokensAsync(LlmRequest request, CancellationToken ct);
     Task<LlmResponse> GenerateAsync(LlmRequest request, CancellationToken ct);
 }
-public enum LlmErrorKind { RateLimited, Unavailable, Timeout, AuthFailed, BadRequest }
+public enum LlmErrorKind { RateLimited, Unavailable, Timeout, AuthFailed, BadRequest, ModelNotFound, InvalidResponse, TokenCountUnavailable }
 public sealed class LlmException(LlmErrorKind kind, TimeSpan? retryAfter = null) : Exception("AI provider request failed.")
 {
     public LlmErrorKind Kind { get; } = kind;

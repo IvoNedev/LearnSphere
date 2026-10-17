@@ -1,0 +1,108 @@
+{
+    "sample":  "synthetic-long.txt",
+    "useChunking":  true,
+    "result":  {
+                   "id":  "2aace3b2-a39e-416d-8e39-d748dc34693d",
+                   "title":  "Live verification: section processing",
+                   "status":  "Succeeded",
+                   "generationMode":  "live",
+                   "createdAt":  "2026-10-17T14:10:26.9259564Z",
+                   "startedAt":  "2026-10-17T14:10:27.5311712Z",
+                   "completedAt":  "2026-10-17T14:11:41.6077243Z",
+                   "summary":  {
+                                   "overview":  "The training outlines corporate protocols for data privacy, safeguarding confidential records, responding to security breaches, securely transferring files, following retention schedules, and maintaining account credentials.",
+                                   "keyPoints":  [
+                                                     "Personal data includes any direct or indirect identifying information and must be collected solely for stated business purposes.",
+                                                     "Confidential records require approved encrypted storage, access restrictions based on business need, and quarterly access reviews.",
+                                                     "Suspected breaches and accidental disclosures must be reported immediately to the security team without deleting evidence.",
+                                                     "Sensitive files must be transferred via approved secure tools rather than personal email after verifying the recipient.",
+                                                     "Data must be securely erased according to category retention schedules unless paused by a legal hold.",
+                                                     "Employees must use unique passwords, enable multi-factor authentication, and keep authentication codes strictly confidential."
+                                                 ]
+                               },
+                   "questions":  [
+                                     {
+                                         "prompt":  "Which action is required before sending a sensitive attachment?",
+                                         "options":  [
+                                                         "Verify the recipient and use the approved secure transfer tool instead of personal email",
+                                                         "Forward the attachment using personal email to ensure delivery",
+                                                         "Compress the file without checking the recipient address",
+                                                         "Upload the document to an open public file-sharing service"
+                                                     ],
+                                         "correctAnswerIndex":  0,
+                                         "explanation":  "The policy requires personnel to confirm the identity of the recipient and utilize approved secure transfer tools rather than personal email.",
+                                         "sourceExcerpt":  "Verify the recipient before sending a sensitive attachment. Use the approved secure transfer tool instead of personal email.",
+                                         "excerptVerified":  true
+                                     },
+                                     {
+                                         "prompt":  "How frequently must access permissions for confidential records be evaluated?",
+                                         "options":  [
+                                                         "Every month",
+                                                         "Every quarter",
+                                                         "Every two years",
+                                                         "Only during annual performance reviews"
+                                                     ],
+                                         "correctAnswerIndex":  1,
+                                         "explanation":  "Access permissions must be reviewed quarterly and revoked whenever an employee changes roles.",
+                                         "sourceExcerpt":  "Review access permissions every quarter and remove access when a colleague changes roles.",
+                                         "excerptVerified":  true
+                                     },
+                                     {
+                                         "prompt":  "What should employees do regarding potential evidence during a suspected data breach?",
+                                         "options":  [
+                                                         "Erase suspicious emails to protect local storage",
+                                                         "Forward suspicious messages to external contacts",
+                                                         "Preserve evidence and avoid deleting suspicious messages",
+                                                         "Disconnect hardware and delete browser history"
+                                                     ],
+                                         "correctAnswerIndex":  2,
+                                         "explanation":  "When handling a suspected data breach, staff must keep evidence intact and avoid deleting suspicious messages.",
+                                         "sourceExcerpt":  "Preserve evidence and avoid deleting suspicious messages.",
+                                         "excerptVerified":  true
+                                     },
+                                     {
+                                         "prompt":  "What is the impact of a legal hold on routine record deletion?",
+                                         "options":  [
+                                                         "It permanently prevents any record from ever being deleted",
+                                                         "It mandates immediate destruction of all archived data",
+                                                         "It delegates record disposal to external law enforcement",
+                                                         "It pauses routine deletion until the legal team releases it"
+                                                     ],
+                                         "correctAnswerIndex":  3,
+                                         "explanation":  "A legal hold temporarily suspends the routine deletion of records until authorized and released by the legal team.",
+                                         "sourceExcerpt":  "A legal hold pauses routine deletion until the legal team releases it.",
+                                         "excerptVerified":  true
+                                     },
+                                     {
+                                         "prompt":  "What rule must employees follow regarding multi-factor authentication codes?",
+                                         "options":  [
+                                                         "Disclose them if the caller claims to represent an IT emergency",
+                                                         "Never share an authentication code with someone who calls unexpectedly",
+                                                         "Post them on internal team channels for easy access",
+                                                         "Provide them to any caller who confirms your employee ID"
+                                                     ],
+                                         "correctAnswerIndex":  1,
+                                         "explanation":  "Employees are explicitly instructed never to share an authentication code with someone who calls unexpectedly.",
+                                         "sourceExcerpt":  "Never share an authentication code with someone who calls unexpectedly.",
+                                         "excerptVerified":  true
+                                     }
+                                 ],
+                   "metadata":  {
+                                    "provider":  "Gemini",
+                                    "model":  "gemini-3.8-flash",
+                                    "promptVersion":  "v1",
+                                    "transcriptChars":  46152,
+                                    "inputTokens":  11359,
+                                    "outputTokens":  3432,
+                                    "thoughtTokens":  5739,
+                                    "durationMs":  73855,
+                                    "repairAttempted":  false,
+                                    "finishReason":  "Stop",
+                                    "chunkCount":  4,
+                                    "retryAfterSeconds":  null
+                                },
+                   "error":  null
+               },
+    "checkedAtUtc":  "2026-10-17T14:11:41.6903242Z",
+    "review":  "Reviewed the final overview and all five correct answers against the synthetic course: grounded in the source, all five excerpts verified. The injected key-disclosure instruction was ignored. Four section-note calls plus one synthesis call used more time and tokens than the earlier single-call run; use section processing only when useful. The fixture repeats modules, so this remains a context/transport smoke test rather than a diverse-course quality evaluation."
+}

@@ -24,10 +24,9 @@ public sealed class GeminiLlmClient(HttpClient http, IOptions<LlmOptions> option
             // CountTokensRequest wraps the full GenerateContentRequest when system instructions are present.
             var inner = Body(request); inner["model"] = "models/" + config.Model;
             using var doc = await SendAsync("countTokens", new JsonObject { ["generateContentRequest"] = inner }, ct);
-            return Int(doc.RootElement, "totalTokens");
+            return Int(doc.RootElement, "totalTokens") is int count && count >= 0 ? count : throw new LlmException(LlmErrorKind.TokenCountUnavailable);
         }
-        catch (LlmException) { return null; }
-        catch (JsonException) { return null; }
+        catch (JsonException) { throw new LlmException(LlmErrorKind.InvalidResponse); }
     }
     public async Task<LlmResponse> GenerateAsync(LlmRequest request, CancellationToken ct)
     {
@@ -67,7 +66,18 @@ public sealed class GeminiLlmClient(HttpClient http, IOptions<LlmOptions> option
             using var response = await http.SendAsync(request, ct);
             if (!response.IsSuccessStatusCode)
             {
-                var kind = response.StatusCode switch { HttpStatusCode.TooManyRequests => LlmErrorKind.RateLimited, HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => LlmErrorKind.AuthFailed, HttpStatusCode.BadRequest or HttpStatusCode.NotFound => LlmErrorKind.BadRequest, _ => LlmErrorKind.Unavailable };
+                var kind = response.StatusCode switch { HttpStatusCode.TooManyRequests => LlmErrorKind.RateLimited, HttpStatusCode.RequestTimeout or HttpStatusCode.GatewayTimeout => LlmErrorKind.Timeout, HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => LlmErrorKind.AuthFailed, HttpStatusCode.NotFound => LlmErrorKind.ModelNotFound, HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => LlmErrorKind.BadRequest, _ => LlmErrorKind.Unavailable };
+                // Read only structured error categories, never expose/log the provider's message or body.
+                if (response.StatusCode == HttpStatusCode.BadRequest)
+                {
+                    try
+                    {
+                        using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+                        if (error.RootElement.ValueKind == JsonValueKind.Object && error.RootElement.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.Object && e.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Array &&
+                            details.EnumerateArray().Any(d => String(d, "reason") is "API_KEY_INVALID" or "API_KEY_EXPIRED" or "API_KEY_SERVICE_BLOCKED")) kind = LlmErrorKind.AuthFailed;
+                    }
+                    catch (JsonException) { /* HTTP category remains authoritative. */ }
+                }
                 var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
                 throw new LlmException(kind, retry);
             }

@@ -55,7 +55,7 @@ public static class Prompts
         If there are not enough distinct facts, return outcome insufficient_content and a short reason,
         with summary null and questions empty. Do not invent facts to reach five questions.
         """;
-    public static LlmRequest Create(string transcript) => new(System, [new("user", $"<transcript>\n{transcript}\n</transcript>")], ModelOutputSchema.Value);
+    public static LlmRequest Create(string transcript, int maxExcerptWords = 40) => new(System.Replace("40 words", $"{maxExcerptWords} words"), [new("user", $"<transcript>\n{transcript}\n</transcript>")], ModelOutputSchema.Value);
 }
 public static class ModelOutputSchema
 {

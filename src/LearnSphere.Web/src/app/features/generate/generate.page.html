@@ -21,7 +21,7 @@
       ><input
         id="title"
         formControlName="title"
-        maxlength="200"
+        [attr.maxlength]="capabilities()?.maxTitleChars"
         placeholder="e.g. Data privacy essentials"
       />
       @if (form.controls.title.errors?.['server']) {
@@ -29,7 +29,9 @@
       }
       <div class="label-row">
         <label for="transcript">Transcript</label
-        ><span class="counter">{{ count() | number }} / 200,000</span>
+        ><span class="counter"
+          >{{ count() | number }} / {{ capabilities()?.maxTranscriptChars | number }}</span
+        >
       </div>
       <textarea
         id="transcript"
@@ -38,13 +40,27 @@
         aria-describedby="transcript-help"
         rows="14"
       ></textarea>
-      <p id="transcript-help" class="hint">500–200,000 characters · English · Plain text</p>
+      <p id="transcript-help" class="hint">
+        @if (capabilities(); as caps) {
+          {{ caps.minTranscriptChars | number }}–{{ caps.maxTranscriptChars | number }} characters ·
+          English · Plain text
+        } @else {
+          Loading server limits…
+        }
+      </p>
       @if (form.controls.transcript.touched && form.controls.transcript.invalid) {
         <p class="field-error">
           {{
             form.controls.transcript.errors?.['server'] ||
-              'Please enter a transcript between 500 and 200,000 characters.'
+              'Please use the transcript limits shown above (excluding surrounding whitespace).'
           }}
+        </p>
+      }
+      @if (capabilities()?.chunkingEnabled) {
+        <label><input type="checkbox" formControlName="useChunking" /> Process in sections</label>
+        <p class="hint">
+          Keeps the same total size cap. Larger transcripts use section notes followed by one final
+          summary and quiz; this makes more AI calls and can consume more quota.
         </p>
       }
       @if (error()) {
@@ -55,7 +71,11 @@
           Live mode sends your transcript to Gemini.<br />Use synthetic or approved training
           material.
         </p>
-        <button class="primary" type="submit" [disabled]="pending() || form.invalid">
+        <button
+          class="primary"
+          type="submit"
+          [disabled]="!capabilities() || pending() || form.invalid"
+        >
           {{ pending() ? 'Submitting…' : 'Create learning material' }}
           <span aria-hidden="true">→</span>
         </button>

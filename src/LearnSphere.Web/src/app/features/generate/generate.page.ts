@@ -4,7 +4,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GenerationsApi } from '../../core/generations-api.service';
-import { ListItem } from '../../core/models';
+import { Capabilities, ListItem } from '../../core/models';
 import { problemDetails } from '../../core/problem-details';
 
 @Component({
@@ -18,17 +18,38 @@ export class GeneratePage {
   private destroy = inject(DestroyRef);
   private fb = inject(FormBuilder);
   readonly form = this.fb.nonNullable.group({
-    title: ['', Validators.maxLength(200)],
-    transcript: [
-      '',
-      [Validators.required, Validators.minLength(500), Validators.maxLength(200000)],
-    ],
+    title: [''],
+    transcript: ['', [Validators.required]],
+    useChunking: [false],
   });
   readonly pending = signal(false);
   readonly error = signal('');
   readonly history = signal<ListItem[]>([]);
   readonly count = signal(0);
+  readonly capabilities = signal<Capabilities | null>(null);
   constructor() {
+    this.api
+      .capabilities()
+      .pipe(takeUntilDestroyed())
+      .subscribe({
+        next: (caps) => {
+          this.capabilities.set(caps);
+          this.form.controls.title.setValidators(Validators.maxLength(caps.maxTitleChars));
+          this.form.controls.transcript.setValidators([
+            Validators.required,
+            (control) => {
+              const length = String(control.value || '').trim().length;
+              return length < caps.minTranscriptChars || length > caps.maxTranscriptChars
+                ? { length: true }
+                : null;
+            },
+          ]);
+          this.form.controls.title.updateValueAndValidity();
+          this.form.controls.transcript.updateValueAndValidity();
+        },
+        error: () =>
+          this.error.set('Could not load input limits from the server. Reload the page to retry.'),
+      });
     this.api
       .list()
       .pipe(takeUntilDestroyed())
@@ -38,19 +59,20 @@ export class GeneratePage {
       });
     this.form.controls.transcript.valueChanges
       .pipe(takeUntilDestroyed())
-      .subscribe((value) => this.count.set(value.length));
+      .subscribe((value) => this.count.set(value.trim().length));
   }
   loadSample() {
     this.api
       .sample()
       .pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
-        next: (transcript) => this.form.setValue({ title: 'Data privacy essentials', transcript }),
+        next: (transcript) =>
+          this.form.patchValue({ title: 'Data privacy essentials', transcript }),
         error: (e) => this.error.set(problemDetails(e).message),
       });
   }
   submit() {
-    if (this.pending() || this.form.invalid) {
+    if (!this.capabilities() || this.pending() || this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }

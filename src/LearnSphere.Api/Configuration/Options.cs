@@ -23,6 +23,14 @@ public sealed class GenerationOptions
     public int MaxExcerptWords { get; set; } = 40;
     public int MaxConcurrentJobs { get; set; } = 1;
     public int MaxPendingJobs { get; set; } = 20;
+    public int MaxTitleChars { get; set; } = 200;
+    public int MaxRequestBodyBytes { get; set; } = 1048576;
+    public int PollIntervalMs { get; set; } = 1500;
+    public int MaxPollAttempts { get; set; } = 300;
+    public int PollRequestTimeoutMs { get; set; } = 10000;
+    public bool ChunkingEnabled { get; set; } = true;
+    public int ChunkTargetChars { get; set; } = 12000;
+    public int MaxChunks { get; set; } = 20;
 }
 public sealed class OptionsValidator : IValidateOptions<LlmOptions>, IValidateOptions<GenerationOptions>
 {
@@ -38,6 +46,7 @@ public sealed class OptionsValidator : IValidateOptions<LlmOptions>, IValidateOp
     public ValidateOptionsResult Validate(string? name, GenerationOptions o) =>
         o.MinTranscriptChars > 0 && o.MaxTranscriptChars >= o.MinTranscriptChars && o.MaxInputTokens > 0 &&
         o.QuestionCount == 5 && o.OptionsPerQuestion == 4 && o.MaxExcerptWords is > 0 and <= 40 &&
-        o.MaxConcurrentJobs is > 0 and <= 4 && o.MaxPendingJobs > 0
+        o.MaxConcurrentJobs is > 0 and <= 4 && o.MaxPendingJobs > 0 && o.MaxTitleChars is > 0 and <= 200 &&
+        o.PollIntervalMs >= 100 && o.MaxPollAttempts is > 0 and <= 1000 && o.PollRequestTimeoutMs >= 100 && o.ChunkTargetChars >= 500 && o.MaxChunks is > 0 and <= 50 && o.MaxRequestBodyBytes >= 1024
             ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail("Invalid Generation limits; this POC supports five questions and four options.");
 }

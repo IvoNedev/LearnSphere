@@ -25,6 +25,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public ILlmClient? Llm { get; init; }
     public bool InvalidLive { get; init; }
     public int MaxPending { get; init; } = 20;
+    public Dictionary<string, string?> Overrides { get; init; } = [];
+    public Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor? SaveInterceptor { get; init; }
     private readonly string webRoot = Path.Combine(Path.GetTempPath(), "learnsphere-test-web-" + Guid.NewGuid().ToString("N"));
     public ApiFactory() { keeper = new(database); keeper.Open(); }
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,8 +42,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Llm:Model"] = "",
             ["Llm:ApiKey"] = "",
             ["Generation:MaxPendingJobs"] = MaxPending.ToString()
-        }));
-        builder.ConfigureServices(services => { if (Llm is not null) { services.RemoveAll<ILlmClient>(); services.AddSingleton(Llm); } });
+        }).AddInMemoryCollection(Overrides));
+        builder.ConfigureServices(services => { if (Llm is not null) { services.RemoveAll<ILlmClient>(); services.AddSingleton(Llm); } if (SaveInterceptor is not null) services.AddDbContext<AppDbContext>(o => o.AddInterceptors(SaveInterceptor)); });
     }
     protected override void Dispose(bool disposing) { base.Dispose(disposing); if (disposing) keeper.Dispose(); }
 }
@@ -136,14 +138,15 @@ public class ApiTests
         var services = new ServiceCollection(); services.AddLogging(); services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection));
         services.AddSingleton<ILlmClient, LearnSphere.Api.Providers.MockLlmClient>(); services.AddScoped<TrainingContentService>(); services.AddScoped<GenerationProcessor>();
         services.AddSingleton(Options.Create(new LearnSphere.Api.Configuration.LlmOptions())); services.AddSingleton(Options.Create(new LearnSphere.Api.Configuration.GenerationOptions()));
+        services.AddSingleton(RecoveryTests.Journal());
         using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); await db.Database.EnsureCreatedAsync();
         var interrupted = new LearnSphere.Api.Domain.Generation { Status = GenerationStatus.Processing, Transcript = GenerationTests.Transcript };
         var queued = new LearnSphere.Api.Domain.Generation { Transcript = GenerationTests.Transcript };
-        db.AddRange(interrupted, queued); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        db.AddRange(interrupted, queued); db.GenerationIntents.Add(new() { GenerationId = queued.Id, Provider = "Mock", Model = "" }); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         using var signal = new GenerationSignal(); using var worker = new GenerationWorker(provider.GetRequiredService<IServiceScopeFactory>(), signal, Options.Create(new LearnSphere.Api.Configuration.GenerationOptions()), NullLogger<GenerationWorker>.Instance);
         await worker.StartAsync(default);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        while ((await db.Generations.AsNoTracking().SingleAsync(x => x.Id == queued.Id, deadline.Token)).Status == GenerationStatus.Queued) await Task.Delay(20, deadline.Token);
+        while ((await db.Generations.AsNoTracking().SingleAsync(x => x.Id == queued.Id, deadline.Token)).Status is GenerationStatus.Queued or GenerationStatus.Processing) await Task.Delay(20, deadline.Token);
         await worker.StopAsync(default);
         var stale = await db.Generations.AsNoTracking().SingleAsync(x => x.Id == interrupted.Id); Assert.Equal("interrupted", stale.ErrorCode); Assert.Null(stale.Transcript);
         var done = await db.Generations.AsNoTracking().SingleAsync(x => x.Id == queued.Id); Assert.Equal(GenerationStatus.Succeeded, done.Status); Assert.Null(done.Transcript);
@@ -156,9 +159,9 @@ public class ApiTests
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options); await db.Database.EnsureCreatedAsync();
-        var job = new LearnSphere.Api.Domain.Generation { Status = GenerationStatus.Processing, Transcript = GenerationTests.Transcript }; db.Add(job); await db.SaveChangesAsync();
+        var job = new LearnSphere.Api.Domain.Generation { Status = GenerationStatus.Processing, Transcript = GenerationTests.Transcript }; db.Add(job); db.GenerationIntents.Add(new() { GenerationId = job.Id, Provider = "Mock", Model = "" }); await db.SaveChangesAsync();
         var fake = new ScriptedLlmClient(unexpected ? new InvalidOperationException("private") : new LlmException(LlmErrorKind.Unavailable));
-        await new GenerationProcessor(db, GenerationTests.Service(fake), NullLogger<GenerationProcessor>.Instance).ProcessAsync(job.Id, default);
+        await new GenerationProcessor(db, GenerationTests.Service(fake), NullLogger<GenerationProcessor>.Instance, Options.Create(new LearnSphere.Api.Configuration.LlmOptions()), RecoveryTests.Journal()).ProcessAsync(job.Id, default);
         Assert.Null(job.Transcript); Assert.Equal(GenerationStatus.Failed, job.Status); Assert.Equal(unexpected ? "internal_error" : "provider_unavailable", job.ErrorCode);
     }
 }

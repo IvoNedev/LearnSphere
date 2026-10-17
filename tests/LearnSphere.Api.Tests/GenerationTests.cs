@@ -12,8 +12,9 @@ public sealed class ScriptedLlmClient(params object[] responses) : ILlmClient
 {
     public int Calls { get; private set; }
     public int? Tokens { get; set; } = 100;
+    public Exception? CountError { get; set; }
     public List<LlmRequest> Requests { get; } = [];
-    public Task<int?> CountTokensAsync(LlmRequest request, CancellationToken ct) => Task.FromResult(Tokens);
+    public Task<int?> CountTokensAsync(LlmRequest request, CancellationToken ct) { if (CountError is { } error) throw error; return Task.FromResult(Tokens); }
     public Task<LlmResponse> GenerateAsync(LlmRequest request, CancellationToken ct)
     {
         Requests.Add(request); var response = responses[Calls++];
@@ -128,10 +129,10 @@ public class GenerationTests
         var fake = new ScriptedLlmClient { Tokens = 100001 }; Assert.Equal("input_too_large", (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(0, fake.Calls);
     }
     [Fact]
-    public async Task UnknownCountUsesConservativeFallback()
+    public async Task UnknownCountHasItsOwnErrorAndNeverPretendsInputIsTooLarge()
     {
-        var fake = new ScriptedLlmClient(Response()) { Tokens = null }; Assert.Null((await Service(fake).GenerateAsync(Transcript, default)).ErrorCode);
-        Assert.Equal("input_too_large", (await Service(new ScriptedLlmClient { Tokens = null }, new() { MaxInputTokens = 100 }).GenerateAsync(Transcript, default)).ErrorCode);
+        var fake = new ScriptedLlmClient { Tokens = null }; Assert.Equal("token_count_unavailable", (await Service(fake).GenerateAsync(new string('x', 46000), default)).ErrorCode);
+        Assert.Equal(0, fake.Calls);
     }
     [Fact]
     public async Task UnverifiedExcerptIsFlaggedNotFailed()
@@ -145,8 +146,23 @@ public class GenerationTests
     [InlineData(LlmErrorKind.AuthFailed, "provider_auth_failed")]
     [InlineData(LlmErrorKind.Unavailable, "provider_unavailable")]
     [InlineData(LlmErrorKind.Timeout, "provider_timeout")]
-    [InlineData(LlmErrorKind.BadRequest, "internal_error")]
+    [InlineData(LlmErrorKind.BadRequest, "provider_request_invalid")]
+    [InlineData(LlmErrorKind.ModelNotFound, "provider_model_not_found")]
+    [InlineData(LlmErrorKind.InvalidResponse, "provider_invalid_response")]
+    [InlineData(LlmErrorKind.TokenCountUnavailable, "token_count_unavailable")]
     public async Task MapsProviderErrors(LlmErrorKind kind, string code) => Assert.Equal(code, (await Service(new ScriptedLlmClient(new LlmException(kind))).GenerateAsync(Transcript, default)).ErrorCode);
+    [Theory]
+    [InlineData(LlmErrorKind.AuthFailed, "provider_auth_failed")]
+    [InlineData(LlmErrorKind.RateLimited, "provider_rate_limited")]
+    [InlineData(LlmErrorKind.Timeout, "provider_timeout")]
+    [InlineData(LlmErrorKind.Unavailable, "provider_unavailable")]
+    [InlineData(LlmErrorKind.BadRequest, "provider_request_invalid")]
+    public async Task CountErrorsKeepCategoryForLongInput(LlmErrorKind kind, string code)
+    {
+        var fake = new ScriptedLlmClient { CountError = new LlmException(kind, TimeSpan.FromSeconds(12)) };
+        var result = await Service(fake).GenerateAsync(new string('x', 46000), default);
+        Assert.Equal(code, result.ErrorCode); Assert.Equal(12, result.Metadata.RetryAfterSeconds); Assert.Equal(0, fake.Calls);
+    }
     [Fact]
     public async Task MockUsesVerbatimExcerpts()
     {

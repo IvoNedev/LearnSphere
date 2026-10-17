@@ -44,6 +44,9 @@ public class GeminiTests
     [InlineData(403, LlmErrorKind.AuthFailed)]
     [InlineData(503, LlmErrorKind.Unavailable)]
     [InlineData(400, LlmErrorKind.BadRequest)]
+    [InlineData(404, LlmErrorKind.ModelNotFound)]
+    [InlineData(408, LlmErrorKind.Timeout)]
+    [InlineData(504, LlmErrorKind.Timeout)]
     public async Task ErrorsDoNotLeakBodiesOrRetry(int status, LlmErrorKind expected)
     {
         int calls = 0;
@@ -61,7 +64,31 @@ public class GeminiTests
             return new(HttpStatusCode.OK) { Content = new StringContent("{\"totalTokens\":123}") };
         }));
         Assert.Equal(123, await client.CountTokensAsync(Prompts.Create("source"), default));
-        Assert.Null(await Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)))).CountTokensAsync(Prompts.Create("source"), default));
+        var error = await Assert.ThrowsAsync<LlmException>(() => Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)))).CountTokensAsync(Prompts.Create("source"), default));
+        Assert.Equal(LlmErrorKind.Unavailable, error.Kind);
+    }
+    [Theory]
+    [InlineData("{}", LlmErrorKind.TokenCountUnavailable)]
+    [InlineData("{\"totalTokens\":-1}", LlmErrorKind.TokenCountUnavailable)]
+    [InlineData("not json", LlmErrorKind.InvalidResponse)]
+    public async Task UnusableTokenCountIsExplicit(string body, LlmErrorKind expected)
+    {
+        var client = Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) })));
+        var error = await Assert.ThrowsAsync<LlmException>(() => client.CountTokensAsync(Prompts.Create("source"), default)); Assert.Equal(expected, error.Kind);
+    }
+    [Fact]
+    public async Task GoogleInvalidKeyReasonIsAuthenticationEvenWithHttp400()
+    {
+        var client = Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("""{"error":{"message":"PRIVATE","details":[{"reason":"API_KEY_INVALID"}]}}""") })));
+        var error = await Assert.ThrowsAsync<LlmException>(() => client.CountTokensAsync(Prompts.Create("source"), default)); Assert.Equal(LlmErrorKind.AuthFailed, error.Kind); Assert.DoesNotContain("PRIVATE", error.ToString());
+    }
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{\"error\":null}")]
+    public async Task MalformedErrorEnvelopeKeepsHttpCategory(string body)
+    {
+        var client = Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent(body) })));
+        var error = await Assert.ThrowsAsync<LlmException>(() => client.GenerateAsync(Prompts.Create("source"), default)); Assert.Equal(LlmErrorKind.BadRequest, error.Kind);
     }
     [Fact]
     public async Task HttpTimeoutIsMapped()

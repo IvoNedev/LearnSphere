@@ -2,6 +2,7 @@ export type Status = 'Queued' | 'Processing' | 'Succeeded' | 'Failed';
 export interface CreateRequest {
   title?: string;
   transcript: string;
+  useChunking?: boolean;
 }
 export interface ListItem {
   id: string;
@@ -34,5 +35,27 @@ export interface Generation extends ListItem {
     durationMs: number;
     repairAttempted: boolean;
   };
-  error?: { code: string; message: string; retryable: boolean };
+  error?: {
+    code: string;
+    message: string;
+    retryable: boolean;
+    resumeStage?: string;
+    retryAfterSeconds?: number;
+  };
+}
+export interface Capabilities {
+  minTranscriptChars: number;
+  maxTranscriptChars: number;
+  maxTitleChars: number;
+  maxRequestBodyBytes: number;
+  questionCount: number;
+  optionsPerQuestion: number;
+  maxExcerptWords: number;
+  pollIntervalMs: number;
+  maxPollAttempts: number;
+  pollRequestTimeoutMs: number;
+  chunkingEnabled: boolean;
+  chunkTargetChars: number;
+  maxChunks: number;
+  generationMode: string;
 }
