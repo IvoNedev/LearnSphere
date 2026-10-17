@@ -1,0 +1,14 @@
+<section class="intro"><p class="eyebrow">THE TRAINING WORKSPACE / 01</p><h1>From spoken knowledge<br>to lasting understanding.</h1><p class="lede">Turn a course transcript into a clear summary and a quiz your team can learn from.</p></section>
+<div class="workspace"><section class="panel input-panel"><div class="section-heading"><div><span class="step">01</span><h2>Your source material</h2></div><button type="button" class="text-button" (click)="loadSample()" [disabled]="pending()">Load sample ↗</button></div>
+<form [formGroup]="form" (ngSubmit)="submit()">
+<label for="title">Course title <span class="muted">(optional)</span></label><input id="title" formControlName="title" maxlength="200" placeholder="e.g. Data privacy essentials">
+@if (form.controls.title.errors?.['server']) { <p class="field-error">{{ form.controls.title.errors?.['server'] }}</p> }
+<div class="label-row"><label for="transcript">Transcript</label><span class="counter">{{ count() | number }} / 200,000</span></div>
+<textarea id="transcript" formControlName="transcript" placeholder="Paste the transcript of your course here…" aria-describedby="transcript-help" rows="14"></textarea>
+<p id="transcript-help" class="hint">500–200,000 characters · English · Plain text</p>
+@if (form.controls.transcript.touched && form.controls.transcript.invalid) { <p class="field-error">{{ form.controls.transcript.errors?.['server'] || 'Please enter a transcript between 500 and 200,000 characters.' }}</p> }
+@if (error()) { <p class="error-banner" role="alert">{{ error() }}</p> }
+<div class="form-footer"><p class="hint">Live mode sends your transcript to Gemini.<br>Use synthetic or approved training material.</p><button class="primary" type="submit" [disabled]="pending() || form.invalid">{{ pending() ? 'Submitting…' : 'Create learning material' }} <span aria-hidden="true">→</span></button></div>
+</form></section>
+<aside class="sidebar"><section class="note"><p class="eyebrow">WHAT YOU’LL GET</p><h2>A useful companion<br>to every course.</h2><ol class="outputs"><li><span>01</span><div><strong>A concise summary</strong><p>The overview and key ideas, ready to revisit.</p></div></li><li><span>02</span><div><strong>Five thoughtful questions</strong><p>Four choices each, with explanations and source excerpts.</p></div></li><li><span>03</span><div><strong>A moment to review</strong><p>Check the source evidence before sharing with your learners.</p></div></li></ol></section>
+<section class="history"><p class="eyebrow">RECENT MATERIAL</p>@for (job of history(); track job.id) { <a class="history-item" [routerLink]="['/generations', job.id]"><strong>{{ job.title || 'Untitled course' }}</strong><span>{{ job.createdAt | date:'MMM d, HH:mm' }} · {{ job.status }} · {{ job.generationMode }}</span></a> } @empty { <p class="hint">Your generated material will appear here.</p> }</section></aside></div>

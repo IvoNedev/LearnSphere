@@ -1,0 +1,15 @@
+Data Privacy Basics: Corporate Training
+
+Personal data is any information that identifies a person directly or indirectly. Collect only the personal data needed for the agreed business purpose. Explain the purpose before collecting employee information.
+
+Use approved encrypted storage for confidential records. Restrict access to colleagues who need the records for their work. Review access permissions every quarter and remove access when a colleague changes roles.
+
+Report a suspected data breach immediately to the security team. Preserve evidence and avoid deleting suspicious messages. The response team records the discovery time and coordinates the investigation.
+
+Verify the recipient before sending a sensitive attachment. Use the approved secure transfer tool instead of personal email. An accidental disclosure should be reported even when it was unintentional.
+
+Follow the retention schedule for each record category. Delete records securely when their approved retention period ends. A legal hold pauses routine deletion until the legal team releases it.
+
+Use a unique password for each work account. Enable multi-factor authentication wherever it is available. Never share an authentication code with someone who calls unexpectedly.
+
+A manager must review generated training material before sharing it with employees. A matching source excerpt does not prove that a quiz answer is correct. Human review should check context and whether each distractor is plausible.
