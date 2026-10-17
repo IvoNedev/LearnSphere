@@ -57,4 +57,10 @@ public class GeminiTests
         var client = Client(new FakeHandler(async (_, ct) => { await Task.Delay(1000, ct); return new(HttpStatusCode.OK); }), .02);
         var exception = await Assert.ThrowsAsync<LlmException>(() => client.GenerateAsync(Prompts.Create("source"), default)); Assert.Equal(LlmErrorKind.Timeout, exception.Kind);
     }
+    [Theory] [InlineData("[]")] [InlineData("{\"candidates\":null}")] [InlineData("{\"candidates\":[null]}")] [InlineData("not JSON")]
+    public async Task MalformedProviderEnvelopeIsInvalidOutput(string body)
+    {
+        var client = Client(new FakeHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) })));
+        var result = await client.GenerateAsync(Prompts.Create("source"), default); Assert.Equal(FinishReason.Other, result.FinishReason);
+    }
 }

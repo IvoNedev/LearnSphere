@@ -70,6 +70,12 @@ public class GenerationTests
         var fake = new ScriptedLlmClient(new LlmResponse("{}"), new LlmResponse("not json"));
         Assert.Equal("provider_invalid_output", (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode); Assert.Equal(2, fake.Calls);
     }
+    [Fact] public async Task MissingAnswerIndexDoesNotBecomeZero()
+    {
+        var text = Response().Text!.Replace("\"correctAnswerIndex\":0,", "");
+        var fake = new ScriptedLlmClient(new LlmResponse(text), new LlmResponse(text));
+        Assert.Equal("provider_invalid_output", (await Service(fake).GenerateAsync(Transcript, default)).ErrorCode);
+    }
     [Theory]
     [InlineData(FinishReason.MaxTokens, "provider_truncated")]
     [InlineData(FinishReason.Safety, "provider_refused")]

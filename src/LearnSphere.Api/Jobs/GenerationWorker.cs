@@ -35,8 +35,8 @@ public sealed class GenerationProcessor(AppDbContext db, TrainingContentService 
             job.Fail("internal_error");
         }
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Generation finished. Id={Id} Status={Status} Provider={Provider} Model={Model} DurationMs={DurationMs} InputTokens={InputTokens} OutputTokens={OutputTokens} RepairAttempted={RepairAttempted} ErrorCode={ErrorCode}",
-            id, job.Status, job.Metadata?.Provider, job.Metadata?.Model, job.Metadata?.DurationMs, job.Metadata?.InputTokens, job.Metadata?.OutputTokens, job.Metadata?.RepairAttempted, job.ErrorCode);
+        logger.LogInformation("Generation finished. Id={Id} Status={Status} Provider={Provider} Model={Model} PromptVersion={PromptVersion} TranscriptChars={TranscriptChars} TranscriptSha256={TranscriptSha256} DurationMs={DurationMs} InputTokens={InputTokens} OutputTokens={OutputTokens} ThoughtTokens={ThoughtTokens} RepairAttempted={RepairAttempted} ErrorCode={ErrorCode}",
+            id, job.Status, job.Metadata?.Provider, job.Metadata?.Model, job.Metadata?.PromptVersion, job.TranscriptChars, job.TranscriptSha256, job.Metadata?.DurationMs, job.Metadata?.InputTokens, job.Metadata?.OutputTokens, job.Metadata?.ThoughtTokens, job.Metadata?.RepairAttempted, job.ErrorCode);
     }
 }
 public sealed class GenerationWorker(IServiceScopeFactory scopes, GenerationSignal signal, IOptions<GenerationOptions> options, ILogger<GenerationWorker> logger) : BackgroundService

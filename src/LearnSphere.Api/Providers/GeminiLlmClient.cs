@@ -39,11 +39,13 @@ public sealed class GeminiLlmClient(HttpClient http, IOptions<LlmOptions> option
         try
         {
             using var doc = await SendAsync("generateContent", body, ct); var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return new(null, FinishReason.Other);
             string? blocked = root.TryGetProperty("promptFeedback", out var feedback) ? String(feedback, "blockReason") : null;
-            if (!root.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0) return new(null, FinishReason.Other, blocked);
+            if (!root.TryGetProperty("candidates", out var candidates) || candidates.ValueKind != JsonValueKind.Array || candidates.GetArrayLength() == 0) return new(null, FinishReason.Other, blocked);
             var candidate = candidates[0]; string text = "";
-            if (candidate.TryGetProperty("content", out var content) && content.TryGetProperty("parts", out var parts))
-                text = string.Concat(parts.EnumerateArray().Where(p => !p.TryGetProperty("thought", out var thought) || thought.ValueKind != JsonValueKind.True).Select(p => String(p, "text") ?? ""));
+            if (candidate.ValueKind != JsonValueKind.Object) return new(null, FinishReason.Other, blocked);
+            if (candidate.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Object && content.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
+                text = string.Concat(parts.EnumerateArray().Where(p => p.ValueKind == JsonValueKind.Object && (!p.TryGetProperty("thought", out var thought) || thought.ValueKind != JsonValueKind.True)).Select(p => String(p, "text") ?? ""));
             var finish = String(candidate, "finishReason") switch { "STOP" => FinishReason.Stop, "MAX_TOKENS" => FinishReason.MaxTokens, "SAFETY" or "RECITATION" or "BLOCKLIST" or "PROHIBITED_CONTENT" or "SPII" => FinishReason.Safety, _ => FinishReason.Other };
             var usage = root.TryGetProperty("usageMetadata", out var u) ? u : default;
             return new(text, finish, blocked, Int(usage, "promptTokenCount"), Int(usage, "candidatesTokenCount"), Int(usage, "thoughtsTokenCount"));
@@ -69,6 +71,6 @@ public sealed class GeminiLlmClient(HttpClient http, IOptions<LlmOptions> option
         catch (HttpRequestException) { throw new LlmException(LlmErrorKind.Unavailable); }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new LlmException(LlmErrorKind.Timeout); }
     }
-    private static int? Int(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) ? number : null;
-    private static string? String(JsonElement e, string name) => e.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+    private static int? Int(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : null;
+    private static string? String(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 }
