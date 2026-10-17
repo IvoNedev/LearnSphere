@@ -121,8 +121,6 @@ flowchart LR
 - **Angular:** standalone components, reactive forms, HttpClient, local signals, and RxJS polling. Validators, counters, help text, and polling bounds come from `/api/v1/capabilities`, not duplicated frontend defaults. Reload after changing server configuration. Route ID changes cancel the old stream and clear old quiz state. Polling serializes requests, has a per-request timeout and visible attempt counter, and stops at terminal states, route destruction, or its maximum. **Check status again** restarts only status checks. Provider-failure Retry uses an in-memory source draft (back to the form after reload); save-stage Retry uses the server checkpoint and needs no draft. No transcript is persisted in browser storage.
 - **Docker:** Node build, .NET publish, non-root ASP.NET runtime; localhost-only port and one named SQLite volume. `global.json` selects .NET 10, a deliberate update from the brief's suggested .NET 8 baseline.
 
-**No automatic retries on provider errors. On a free tier, retrying a rate-limit error just burns quota, so the app fails fast and the UI offers a Retry button.** Token counting is a separate preparatory call, not a transport retry. A schema repair is a bounded additional generation request only for fixable output drift.
-
 ## Limits, privacy, and operational behavior
 
 Configuration lives in `src/LearnSphere.Api/appsettings.json` and is validated at startup:
@@ -179,10 +177,18 @@ No connected browser was available for a manual visual/click-through inspection;
 
 ## Trade-offs and future work
 
-The final plan expands beyond the initial eight-hour guide with Angular, durable jobs, grounding excerpts, and Docker. Review fixes add optional bounded section processing and save checkpoints. This remains a local single-instance POC. Future work: durable per-section checkpoints, adaptive token-based splitting, SSE progress, authentication/tenant isolation, retention expiry, idempotency, distributed job leases, a Groq/OpenAI adapter, editable questions, learner-safe endpoints, LMS exports, video transcription, and broader factual-quality evaluation. No SCORM support, streaming, or arbitrary-length guarantee is implied.
+- **Angular plus a separate API:** more tooling and build steps than a server-rendered POC, in exchange for a responsive quiz flow and independently testable UI.
+- **SQLite and one worker host:** simple local setup and persistent history, but no multi-instance job coordination or tenant isolation. Database initialization and startup recovery fail startup if storage is unavailable; the app does not accept work before recovery succeeds.
+- **Polling:** simple HTTP deployment without a persistent connection, at the cost of repeated requests and delayed status updates. Checks are sequential and bounded; request failures pause polling until the user resumes it.
+- **Provider failures:** no automatic transport retries. This avoids repeated calls while quota is exhausted, but requires an explicit user retry. The UI displays provider retry-after guidance when available. Token counting is a preparatory call; schema repair is one bounded extra generation call for fixable output drift.
+- **Input cap and optional sections:** the 200k-character cap bounds work. Section processing can fit larger prompts within model limits, but adds calls, latency, quota use, and possible detail loss during synthesis. Section notes are not durably checkpointed; provider-failed workflows rerun their sections. Completed final results have a separate save checkpoint so a storage retry does not repeat inference.
+- **Grounding checks:** exact source excerpts catch invented quotes, but cannot prove that the summary or quiz interpretation is correct. Managers must review generated material. Mock mode selects source sentences mechanically, including sentences containing instruction-like words; it is not an injection-safety evaluation.
+- **Local access:** the answer key is delivered to the manager UI and there is no authentication. This supports local review, but public hosting or learner-facing assessments need access controls and separate answer delivery.
+
+Future work includes durable per-section checkpoints, adaptive token-based splitting, SSE progress, authentication/tenant isolation, retention expiry, idempotency, distributed job leases, additional provider adapters, editable questions, LMS exports, video transcription, and broader factual-quality evaluation. No SCORM support, streaming, or arbitrary-length guarantee is implied.
 
 ## AI assistance and logs
 
 Claude Code and OpenAI Codex were used for planning and comparison. Codex implemented the API, Angular UI, tests, Docker packaging, and documentation, and ran mock/live checks. Reviewers should inspect both the code and decisions; generated content still needs human review.
 
-See [AI-LOGS.md](AI-LOGS.md) and [Context/README.md](Context/README.md). **Publication copies redact a credential supplied in chat and omit internal reasoning; they are not literally unedited exports.** Originals remain in the local tools' session stores. The supplied key should be rotated before submission. No secret is bundled with the app.
+See [AI-LOGS.md](AI-LOGS.md) and [Context/README.md](Context/README.md). **Publication copies redact a credential supplied in chat and omit internal reasoning; they are not literally unedited exports.** Originals remain in the local tools' session stores. The owner has chosen to retain the shared reviewer key; it remains excluded from repository files and must be supplied separately through backend configuration. No secret is bundled with the app.

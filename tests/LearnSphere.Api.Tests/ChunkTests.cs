@@ -46,6 +46,22 @@ public class ChunkTests
         var result = await GenerationTests.Service(fake, new GenerationOptions { ChunkTargetChars = 500 }).GenerateAsync(GenerationTests.Transcript, default, true);
         Assert.Equal("chunk_invalid_output", result.ErrorCode); Assert.Equal(1, fake.Calls);
     }
+    [Fact]
+    public async Task MockKeepsSourceSentencesContainingIgnore()
+    {
+        string source = string.Join(" ", Enumerable.Range(1, 8).Select(i =>
+            $"Procedure {i} says employees must not ignore customer privacy safeguards when handling records."));
+        var result = await GenerationTests.Service(new MockLlmClient()).GenerateAsync(source, default);
+
+        Assert.Null(result.ErrorCode);
+        Assert.Equal(5, result.Content!.Questions.Length);
+        Assert.All(result.Content.Questions, question =>
+        {
+            Assert.Contains("ignore", question.SourceExcerpt);
+            Assert.True(question.ExcerptVerified);
+        });
+    }
+
     private sealed class CountingMock : ILlmClient
     {
         private readonly MockLlmClient inner = new(); public int Calls { get; private set; }

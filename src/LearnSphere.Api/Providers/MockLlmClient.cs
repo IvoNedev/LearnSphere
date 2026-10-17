@@ -13,7 +13,7 @@ public sealed class MockLlmClient : ILlmClient
         ct.ThrowIfCancellationRequested();
         var transcript = request.Messages[0].Text.Replace("<transcript>\n", "").Replace("\n</transcript>", "");
         var facts = Regex.Split(transcript, @"(?<=[.!?])\s+|\r?\n\s*\r?\n")
-            .Select(x => x.Trim()).Where(x => x.Length > 25 && Regex.Matches(x, @"\S+").Count <= 40 && !x.Contains("ignore", StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.Trim()).Where(x => x.Length > 25 && Regex.Matches(x, @"\S+").Count <= 40)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (request.JsonSchema.GetProperty("properties").TryGetProperty("facts", out _))
             return Task.FromResult(new LlmResponse(JsonSerializer.Serialize(new SectionNotes(string.Join(" ", facts.Take(2)), facts.Take(10).Select(f => new SectionFact(f, f)).ToArray()), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
