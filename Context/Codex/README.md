@@ -8,6 +8,10 @@ The root `AGENTS.md` instructs future Codex sessions working in this workspace t
 
 ## Conversations
 
+- [2026-10-19 - GitHub publication](2026-10-19-github-publication.md)
+
+- [2026-10-18 ? Complete project README](2026-10-18-readme.md)
+
 - [2026-10-17 ? Review decisions and implementation](2026-10-17-review-decisions.md)
 
 - [2026-10-17 ? Remaining review attention](2026-10-17-attention-status.md)

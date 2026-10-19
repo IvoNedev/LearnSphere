@@ -17,4 +17,4 @@ node .claude/hooks/save-transcript.js
 node --test scripts/archive-safety.test.cjs
 ```
 
-The transcript of an active turn can lag its final reply. Run the sync once more after that turn finishes, then inspect coverage and the diff before publication. The hook cannot retrieve unavailable web chats or sessions outside the matched local stores. Additional assistants require their own exports. Sanitization is best effort; review all publication artifacts for secrets before pushing. Nothing has been published by this implementation task.
+The transcript of an active turn can lag its final reply. Run the sync once more after that turn finishes, then inspect coverage and the diff before publication. The hook cannot retrieve unavailable web chats or sessions outside the matched local stores. Additional assistants require their own exports. Sanitization is best effort; review all publication artifacts for secrets before pushing. Source publication is tracked in the dated Codex conversation notes.

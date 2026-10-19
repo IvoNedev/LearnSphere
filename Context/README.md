@@ -11,7 +11,8 @@ The `raw/` folders contain publication copies with credentials redacted and inte
 
 ## OpenAI Codex
 
-- [2026-10-17 — There's a folder TODELETE/Codex/skills. Import all the skills into the system](Codex/full/2026-10-17-01a149e4.md)
-- [2026-10-17 — Store all our conversations for this project in Context/Codex](Codex/full/2026-10-17-01a149e7.md)
+- [2026-10-17 — 01a149e4-3d1b-70a3-a1eb-d82e99316dec](Codex/full/2026-10-17-01a149e4.md)
+- [2026-10-17 — 01a149e7-2a5d-7711-9406-d7be92850fd3](Codex/full/2026-10-17-01a149e7.md)
+- [2026-10-18 — Can you produce and finish the readme file ? How to run and, test, etc everythin](Codex/full/2026-10-18-01a14e7e.md)
 
 Codex also keeps hand-written session notes in `Codex/` per `AGENTS.md`.

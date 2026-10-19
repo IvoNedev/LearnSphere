@@ -2,15 +2,29 @@
 
 A C#/.NET 10 API and Angular 21 app that turns a course transcript into a summary and a five-question quiz. Each answer includes an excerpt checked against the submitted source. Managers can answer the quiz, reveal the key, review evidence, revisit history, and delete completed material.
 
-Project owner: **Ivo Nedev**. GitHub creation/publication remains deferred; a personal name is not assumed to be a GitHub account handle.
+Project owner: **Ivo Nedev**. Source repository: [IvoNedev/LearnSphere](https://github.com/IvoNedev/LearnSphere).
 
 **Runs without an API key in Mock mode.** Mock questions are deterministic demonstrations, not evidence of AI quality. Gemini mode uses a real hosted model; both synthetic samples were successfully exercised on `gemini-3.8-flash` on 2026-10-17.
+
+## Contents
+
+- [Quick start](#quick-start): Docker, local development, and Gemini configuration
+- [Everyday commands](#everyday-commands)
+- [Repository layout](#repository-layout)
+- [API](#api)
+- [Architecture and decisions](#architecture-and-decisions)
+- [Verification](#verification)
+- [Manual smoke test](#manual-smoke-test)
+- [Troubleshooting](#troubleshooting)
+- [Data, backups, and cleanup](#data-backups-and-cleanup)
+- [Trade-offs and future work](#trade-offs-and-future-work)
+- [AI assistance and logs](#ai-assistance-and-logs)
 
 ## Quick start
 
 ### Docker (recommended)
 
-Install and start Docker with Linux containers, then run from the repository root:
+Install and start Docker with Linux containers and Docker Compose v2 supporting `--wait`. After cloning or downloading this repository, open a terminal in its root (the folder containing `LearnSphere.sln` and `docker-compose.yml`), then run:
 
 ```sh
 docker compose up --build -d --wait
@@ -28,7 +42,7 @@ The runtime uses non-root UID 1654 and a persistent `/app/App_Data` volume. Its 
 
 ### Local development
 
-Prerequisites: .NET SDK 10.0.401 (or a compatible later feature band), Node 24 LTS, npm. The tested versions are pinned through `global.json` and `package-lock.json`.
+Prerequisites: .NET SDK 10.0.401 (or a compatible later feature band), Node 24 LTS, npm. The SDK selection is defined in `global.json`; npm dependencies are locked in `package-lock.json`. `package.json` declares npm 11.6.1. Node itself is not pinned by the repository. Docker users do not need a local .NET or Node installation.
 
 ```sh
 npm --prefix src/LearnSphere.Web ci
@@ -48,12 +62,12 @@ Open **http://localhost:4200**. The Angular proxy forwards `/api/**` to port 508
 
 Create your own key in [Google AI Studio](https://aistudio.google.com/apikey). Free availability depends on model, account, region, and quotas; check [pricing](https://ai.google.dev/gemini-api/docs/pricing) and your console. A successful model-list request alone does not prove a model permits generation: `gemini-2.5-flash` was listed but rejected for this account. The tested model was `gemini-3.8-flash`.
 
-For Docker, copy `.env.example` to `.env`, fill in your own values locally, then recreate the service:
+For Docker, copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell or `cp .env.example .env` in a POSIX shell). If `.env` already exists, edit it without overwriting its values. Fill in your own values locally, then recreate the service:
 
 ```text
 LLM_PROVIDER=Gemini
 GEMINI_API_KEY=<your own key>
-LLM_MODEL=gemini-3.8-flash
+LLM_MODEL=<model-id-enabled-for-your-account>
 ```
 
 ```sh
@@ -64,11 +78,65 @@ For local development, use backend user secrets, then restart `dotnet run`:
 
 ```sh
 dotnet user-secrets set "Llm:Provider" "Gemini" --project src/LearnSphere.Api
-dotnet user-secrets set "Llm:Model" "gemini-3.8-flash" --project src/LearnSphere.Api
+dotnet user-secrets set "Llm:Model" "<model-id-enabled-for-your-account>" --project src/LearnSphere.Api
 dotnet user-secrets set "Llm:ApiKey" "<your own key>" --project src/LearnSphere.Api
 ```
 
 Alternatively use environment variables `Llm__Provider`, `Llm__Model`, `Llm__ApiKey`. Never put keys in Angular, committed configuration, or AI chats. No shared key is included. Missing live configuration fails at startup. To return to Mock locally, remove the live user secrets or set `Llm:Provider` to `Mock`.
+
+## Everyday commands
+
+Run these from the repository root. The commands work in PowerShell unless explicitly marked otherwise. Initial dependency restores require internet access; Mock generation does not require a provider account.
+
+| Task | Command |
+|---|---|
+| Check installed tools | `dotnet --version`, `node --version`, `npm --version`, `docker compose version` |
+| Restore backend dependencies | `dotnet restore LearnSphere.sln` |
+| Install exact frontend dependencies | `npm --prefix src/LearnSphere.Web ci` |
+| Build the frontend for production | `npm --prefix src/LearnSphere.Web run build` |
+| Run the API | `dotnet run --project src/LearnSphere.Api` |
+| Run the API with reload | `dotnet watch --project src/LearnSphere.Api run` |
+| Run Angular with reload (second terminal) | `npm --prefix src/LearnSphere.Web start` |
+| Run backend tests | `dotnet test LearnSphere.sln` |
+| Run frontend tests once | `npm --prefix src/LearnSphere.Web test -- --watch=false` |
+| Run frontend tests interactively | `npm --prefix src/LearnSphere.Web test` |
+| View Docker logs | `docker compose logs --tail=100 -f api` |
+| Check Docker status | `docker compose ps` |
+| Stop Docker services, preserving data | `docker compose down` |
+
+Backend tests use xUnit; Angular tests use Vitest with jsdom. Neither automated suite needs Gemini credentials or a running Docker service. The solution contains the backend and its tests; it does not build or test Angular. There is no separate lint script configured.
+
+### Publish without Docker
+
+Build Angular **before** publishing the API so its static files are included:
+
+```sh
+npm --prefix src/LearnSphere.Web ci
+npm --prefix src/LearnSphere.Web run build
+dotnet publish src/LearnSphere.Api -c Release -o artifacts/publish
+```
+
+Then run from the published directory with the .NET 10 ASP.NET Core runtime installed:
+
+```sh
+cd artifacts/publish
+dotnet LearnSphere.Api.dll --urls http://localhost:5080
+```
+
+Open http://localhost:5080. Published execution uses Production by default and does not load development user secrets; configure live mode through environment variables. Keep the working directory writable for `App_Data`. This is a local packaging option; public hosting requires the controls described below.
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| `src/LearnSphere.Api/` | .NET API, provider adapters, SQLite persistence, background jobs, and configuration |
+| `src/LearnSphere.Web/` | Angular application, component tests, and development proxy |
+| `tests/LearnSphere.Api.Tests/` | Backend unit, provider, recovery, and API integration tests |
+| `samples/` | Synthetic transcripts, API request fixture, and historical live-run evidence |
+| `scripts/` | Web build helper, archive checks, and secret scanner |
+| `Task/` | Brief, implementation plans, and reviews |
+| `Context/` | Archived project conversations and archive documentation |
+| `Dockerfile`, `docker-compose.yml` | Combined frontend/API image and persistent local deployment |
 
 ## API
 
@@ -89,7 +157,14 @@ curl -i http://localhost:8080/api/v1/generations \
 curl http://localhost:8080/api/v1/generations/<returned-id>
 ```
 
-In PowerShell use `curl.exe` to avoid its legacy curl alias. Job states are `Queued → Processing → Succeeded | Failed`. A succeeded response contains `summary: { overview, keyPoints }`, five `questions`, `generationMode`, and `metadata`. A question has `prompt`, four `options`, zero-based `correctAnswerIndex`, `explanation`, `sourceExcerpt`, and `excerptVerified`. See [the recorded live outputs](samples/recorded-gemini-run.json) for complete examples. The answer key is included because this is an authoring tool for managers, not a secure learner assessment API.
+The multiline curl example above uses POSIX shell continuations. In PowerShell, use:
+
+```powershell
+$job = Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/v1/generations -ContentType 'application/json' -InFile samples/request.json
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/generations/$($job.id)"
+```
+
+Repeat the GET until the job reaches a terminal state. For the local API, replace port 8080 with 5080. In PowerShell use `curl.exe` for curl commands to avoid its legacy curl alias. Job states are `Queued → Processing → Succeeded | Failed`. A succeeded response contains `summary: { overview, keyPoints }`, five `questions`, `generationMode`, and `metadata`. A question has `prompt`, four `options`, zero-based `correctAnswerIndex`, `explanation`, `sourceExcerpt`, and `excerptVerified`. See [the recorded live outputs](samples/recorded-gemini-run.json) for complete examples. The answer key is included because this is an authoring tool for managers, not a secure learner assessment API.
 
 Request failures return Problem Details with `traceId`: 400 for invalid JSON/content type/fields, 413 for a body over 1 MiB, 503 when 20 jobs are pending, and 404/409 as above. Provider failures are **terminal job results returned by GET with HTTP 200**, not failed polling HTTP responses. Examples: `provider_rate_limited`, `provider_unavailable`, `provider_timeout`, `provider_auth_failed`, `provider_refused`, `provider_truncated`, `provider_invalid_output`, `insufficient_content`, `input_too_large`, and `interrupted`. Error messages never include raw provider text.
 
@@ -154,7 +229,7 @@ Transcripts are cleared when a job completes or becomes interrupted. Results, ti
 
 Application logs contain IDs, status, timings, model, usage, and failure categories. They never intentionally log transcripts, prompts, model output, provider bodies, or keys, including Debug. Typed-provider HTTP logging is removed. Generated text is rendered through Angular interpolation, never innerHTML. Prompt separation and independent checks mitigate injection but cannot guarantee factual or instruction safety.
 
-There is no authentication or tenant isolation. Run locally. Public hosting needs access controls, rate limits, and spending controls. The UI remembers source drafts until the tab closes or material is deleted. Public GitHub source publication is distinct from public hosting and is a separate delivery step. Result-recovery checkpoints should be treated as private generated material, just like SQLite results; nulling/deletion is not secure erasure.
+There is no authentication or tenant isolation. Run locally. Public hosting needs access controls, rate limits, and spending controls. The UI remembers source drafts until the tab closes or material is deleted. Source publication on GitHub does not deploy the application. Result-recovery checkpoints should be treated as private generated material, just like SQLite results; nulling/deletion is not secure erasure.
 
 ## Verification
 
@@ -174,6 +249,45 @@ docker compose exec -T api id -u
 Tests cover validation, required fields, bounded repair, excerpts, usage, provider wire format/errors/timeouts, real SQLite queue/worker integration, interrupted startup, pending-job cap, terminal transcript cleanup, malformed/oversized requests, unknown API routes, health/OpenAPI, quiz scoring, markup-as-text, and duplicate-submit prevention. Regression cases include long-input token-count failures, provider drift, save fault injection and checkpoint reopening without repeated inference, nondefault server/UI limits, slow polling and attempt/time bounds, same-component route changes and Delete targeting, quiz reset, and same-ID save retry. Section checks cover bounded splitting, exact input preservation, source validation, explicit failure, and final-only output. Test providers require no key.
 
 No connected browser was available for a manual visual/click-through inspection; Angular component checks and HTTP packaging smoke checks are recorded separately from human browser QA. Before submission, review mobile/desktop layout and complete the quiz once in your browser.
+
+## Manual smoke test
+
+1. Start Docker in Mock mode, or build Angular and start the local API. Open the corresponding URL from Quick start.
+2. Select **Load sample**, optionally enter a title, and select **Create learning material** once. Confirm the job progresses to a completed summary and five questions with a Mock label.
+3. Answer the questions, check the score, and reveal the key. Inspect explanations and source excerpts; confirm verified excerpts appear in the source.
+4. Open history and revisit the result. Refresh its page and confirm the saved material still loads.
+5. Submit an empty or too-short transcript and confirm validation prevents submission. The default minimum is 500 trimmed characters.
+6. For the optional sections path, use `samples/synthetic-long.txt`, select **Process in sections**, and generate another result. Confirm a complete final summary/quiz appears.
+7. Delete a completed item and confirm it disappears from history. Restart the application and confirm any remaining history persists.
+
+Health and the interactive API reference are available at `/health` and `/scalar/v1` on the API origin: port 8080 for Docker or 5080 locally. They are not forwarded by the Angular development proxy on port 4200. Live testing is optional and consumes the configured provider's quota; historical recordings are examples, not a substitute for testing your own configuration.
+
+## Troubleshooting
+
+| Symptom | Action |
+|---|---|
+| SDK not found or incompatible | Check `dotnet --list-sdks` against `global.json`; install a compatible .NET 10 SDK. |
+| `npm ci` fails | Check Node/npm versions and network access. Run from the documented path; preserve the lockfile. |
+| API works but the root page is missing or stale | Run the Angular production build, then restart the API. Backend builds do not build Angular. For active UI development use port 4200. |
+| Angular cannot load capabilities or history | Start the API on 5080. If you change that port, update `src/LearnSphere.Web/proxy.conf.json` and restart Angular. |
+| Port already in use | Stop the process using 4200, 5080, or 8080. For Docker, change the host side of the Compose port mapping and use that URL. |
+| Docker startup or health fails | Check `docker compose ps` and `docker compose logs --tail=100 api`; ensure Docker is running Linux containers and the data volume is writable. |
+| Live configuration fails at startup | Set provider, model, and key in the backend, then restart/recreate it. Compose reads `.env`; local `dotnet run` does not automatically read that file. |
+| Live job fails | Inspect the terminal error in the UI/API. Check account model access and quota for authentication, model, or rate-limit errors. There are no automatic provider retries. |
+| Polling stops | Read the reported error or attempt limit and resume polling from the UI. Resuming polling does not create another generation. |
+| Result could not be saved | Restore writable storage, then use **Retry saving result**. This action requires the completed result checkpoint and does not call the provider again. |
+| Queue is full or deletion returns 409 | Wait for pending work to finish. Processing jobs cannot be deleted. |
+| Mock still produces live output locally | Remove live user-secret/environment overrides or explicitly configure `Llm:Provider` as `Mock`, then restart. |
+
+## Data, backups, and cleanup
+
+Local development stores SQLite and recovery checkpoints under `src/LearnSphere.Api/App_Data/`. Docker stores them in the `learnsphere-data` named volume (normally prefixed by the Compose project name). A published app uses its working directory's `App_Data`.
+
+For a consistent backup, stop the application and copy the **entire** data directory or back up the Docker volume, including SQLite sidecar files and `result-recovery`. Restore while the app is stopped and preserve write permissions for the runtime user. Do not copy only the main database file while SQLite is active.
+
+`docker compose down` preserves data. `docker compose down -v` permanently removes this Compose project's data volume and all stored history. For a deliberate local reset, stop the API and remove its `App_Data` directory; startup recreates the database. These resets also remove recovery checkpoints. Use the UI to delete individual completed items instead when a full reset is unnecessary.
+
+Keep `.env`, user secrets, databases, backups, and generated recovery files out of source control. Run `node scripts/check-secrets.cjs` before sharing repository changes. The scanner is a supplementary check, not proof that every possible secret has been detected.
 
 ## Trade-offs and future work
 
